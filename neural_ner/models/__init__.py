@@ -1,0 +1,1 @@
+from .cnn_bilstm_crf import CNN_BiLSTM_CRF
