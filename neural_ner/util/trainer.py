@@ -6,10 +6,11 @@ import time
 from evaluator import Evaluator
 import sys
 import os
+import numpy as np
 
 class Trainer(object):
     
-    def __init__(self, model, optimizer, result_path, model_name,  usedataset
+    def __init__(self, model, optimizer, result_path, model_name, usedataset,
                  plot_every=500, eval_every=1):
         self.model = model
         self.optimizer = optimizer
@@ -34,7 +35,7 @@ class Trainer(object):
         all_F=[[0,0,0]]
         count = 0
         
-        model.train(True)
+        self.model.train(True)
         for epoch in range(1, num_epochs+1):
             for i, index in enumerate(np.random.permutation(len(train_data))):
                 
@@ -46,7 +47,7 @@ class Trainer(object):
                 chars = data['chars']
                 caps = data['caps']
 
-                score = self.model.forward(sentence, tags, chars, caps)
+                score = self.model(sentence, tags, chars, caps)
                 loss += score.data[0]/len(data['words'])
                 score.backward()
                 
@@ -68,7 +69,7 @@ class Trainer(object):
             
                 #if epoch%self.eval_every==0: ##Isko Left Lena hai
                 
-                model.train(False)
+                self.model.train(False)
                 
                 best_train_F, new_train_F, _ = self.evaluator(model, test_train_data, best_train_F)
                 best_dev_F, new_dev_F, save = self.evaluator(model, dev_data, best_dev_F)

@@ -3,7 +3,7 @@ import torch.nn as nn
 class baseRNN(nn.Module):
 
     def __init__(self, vocab_size, hidden_size, input_dropout_p, output_dropout_p, n_layers, rnn_cell, max_len=25):
-        super(BaseRNN, self).__init__()
+        super(baseRNN, self).__init__()
         
         self.vocab_size = vocab_size
         self.hidden_size = hidden_size

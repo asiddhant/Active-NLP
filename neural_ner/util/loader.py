@@ -4,6 +4,8 @@ import torch.nn as nn
 from torch.nn import init
 from torch.autograd import Variable
 from utils import *
+import codecs
+import cPickle
 
 class Loader(object):
     
@@ -15,7 +17,7 @@ class Loader(object):
         chars_length = [len(c) for c in chars]
         chars_maxlen = max(chars_length)
         chars_mask = np.zeros((len(chars_length), chars_maxlen), dtype='int')
-        for i, c in enumerate(chars2):
+        for i, c in enumerate(chars):
             chars_mask[i, :chars_length[i]] = c
         return chars_mask, chars_length, d
     
@@ -52,8 +54,23 @@ class Loader(object):
                     word[-1] = new_tag
             else:
                 raise Exception('Unknown tagging scheme!')
+                
+    def word_mapping(self, sentences, lower):
+        
+        words = [[x[0].lower() if lower else x[0] for x in s] for s in sentences]
+        dico = create_dico(words)
+
+        dico['<PAD>'] = 10000001
+        dico['<UNK>'] = 10000000
+        dico = {k:v for k,v in dico.items() if v>=3}
+        word_to_id, id_to_word = create_mapping(dico)
+
+        print("Found %i unique words (%i in total)" % (
+            len(dico), sum(len(x) for x in words)
+        ))
+        return dico, word_to_id, id_to_word
     
-    def load_conll_sentences(self, file, lower, zeros):
+    def load_conll_sentences(self, path, lower, zeros):
         
         sentences = []
         sentence = []
@@ -89,23 +106,24 @@ class Loader(object):
         
         
         train_sentences = self.load_conll_sentences(train_path, lower, zeros)
-        dev_sentences = self.load_sentences(dev_path, lower, zeros)
-        test_sentences = self.load_sentences(test_path, lower, zeros)
-        test_train_sentences = self.load_sentences(test_train_path, lower, zeros)
+        dev_sentences = self.load_conll_sentences(dev_path, lower, zeros)
+        test_sentences = self.load_conll_sentences(test_path, lower, zeros)
+        test_train_sentences = self.load_conll_sentences(test_train_path, lower, zeros)
         
         self.update_tag_scheme(train_sentences, tag_scheme)
         self.update_tag_scheme(dev_sentences, tag_scheme)
         self.update_tag_scheme(test_sentences, tag_scheme)
         self.update_tag_scheme(test_train_sentences, tag_scheme)
         
-        dico_words_train = word_mapping(train_sentences, lower)[0]
-
+        dico_words_train = self.word_mapping(train_sentences, lower)[0]
+        
+        all_embedding = 1
         dico_words, word_to_id, id_to_word = augment_with_pretrained(
                 dico_words_train.copy(),
-                parameters['pre_emb'],
+                pretrained,
                 list(itertools.chain.from_iterable(
                     [[w[0] for w in s] for s in dev_sentences + test_sentences])
-                ) if not parameters['all_emb'] else None)
+                ) if not all_embedding else None)
 
         dico_chars, char_to_id, id_to_char = char_mapping(train_sentences)
         dico_tags, tag_to_id, id_to_tag = tag_mapping(train_sentences)
@@ -118,7 +136,7 @@ class Loader(object):
         print("%i / %i / %i sentences in train / dev / test." % (
               len(train_data), len(dev_data), len(test_data)))
         
-        mapping_file = os.path.join('../',results_path,'mapping.pkl')
+        mapping_file = os.path.join(results_path,'mapping.pkl')
         
         if not os.path.isfile(mapping_file):
             all_word_embeds = {}
@@ -127,7 +145,7 @@ class Loader(object):
                 if len(s) == word_dim + 1:
                     all_word_embeds[s[0]] = np.array([float(i) for i in s[1:]])
 
-            word_embeds = np.random.uniform(-np.sqrt(0.06), np.sqrt(0.06), (len(word_to_id), opts.word_dim))
+            word_embeds = np.random.uniform(-np.sqrt(0.06), np.sqrt(0.06), (len(word_to_id), word_dim))
 
             for w in word_to_id:
                 if w in all_word_embeds:

@@ -20,8 +20,10 @@ class WordEncoderRNN(baseRNN):
     def forward(self, sentence, char_embedding, cap_embedding=None ,input_lengths=None):
         
         embedded = self.embedding(sentence)
-        embedded = torch.cat((embedded,char_embedding,cap_embedding),1) if cap_embedding else
-                   torch.cat((embedded,char_embedding),1)
+        if cap_embedding:
+            embedded = torch.cat((embedded,char_embedding,cap_embedding),1)  
+        else:
+            embedded = torch.cat((embedded,char_embedding),1)
         embedded = embedded.unsqueeze(1)
         embedded = self.input_dropout(embedded)
         

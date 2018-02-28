@@ -2,7 +2,11 @@ from __future__ import print_function
 import os
 import re
 import numpy as np
+import codecs
+import torch
 
+START_TAG = '<START>'
+STOP_TAG = '<STOP>'
 
 def get_name(parameters):
     """
@@ -194,3 +198,225 @@ def create_input(data, parameters, add_label, singletons=None):
     if add_label:
         input.append(data['tags'])
     return input
+
+def char_mapping(sentences):
+    """
+    Create a dictionary and mapping of characters, sorted by frequency.
+    """
+    chars = ["".join([w[0] for w in s]) for s in sentences]
+    dico = create_dico(chars)
+    dico['<PAD>'] = 10000000
+    # dico[';'] = 0
+    char_to_id, id_to_char = create_mapping(dico)
+    print("Found %i unique characters" % len(dico))
+    return dico, char_to_id, id_to_char
+
+
+def tag_mapping(sentences):
+    """
+    Create a dictionary and a mapping of tags, sorted by frequency.
+    """
+    tags = [[word[-1] for word in s] for s in sentences]
+    dico = create_dico(tags)
+    dico[START_TAG] = -1
+    dico[STOP_TAG] = -2
+    tag_to_id, id_to_tag = create_mapping(dico)
+    print("Found %i unique named entity tags" % len(dico))
+    return dico, tag_to_id, id_to_tag
+
+
+def cap_feature(s):
+    """
+    Capitalization feature:
+    0 = low caps
+    1 = all caps
+    2 = first letter caps
+    3 = one capital (not first letter)
+    """
+    if s.lower() == s:
+        return 0
+    elif s.upper() == s:
+        return 1
+    elif s[0].upper() == s[0]:
+        return 2
+    else:
+        return 3
+
+
+def prepare_sentence(str_words, word_to_id, char_to_id, lower=False):
+    """
+    Prepare a sentence for evaluation.
+    """
+    def f(x): return x.lower() if lower else x
+    words = [word_to_id[f(w) if f(w) in word_to_id else '<UNK>']
+             for w in str_words]
+    chars = [[char_to_id[c] for c in w if c in char_to_id]
+             for w in str_words]
+    caps = [cap_feature(w) for w in str_words]
+    return {
+        'str_words': str_words,
+        'words': words,
+        'chars': chars,
+        'caps': caps
+    }
+
+
+def prepare_dataset(sentences, word_to_id, char_to_id, tag_to_id, lower=True):
+    """
+    Prepare the dataset. Return a list of lists of dictionaries containing:
+        - word indexes
+        - word char indexes
+        - tag indexes
+    """
+    def f(x): return x.lower() if lower else x
+    data = []
+    for s in sentences:
+        str_words = [w[0] for w in s]
+        words = [word_to_id[f(w) if f(w) in word_to_id else '<UNK>']
+                 for w in str_words]
+        # Skip characters that are not in the training set
+        chars = [[char_to_id[c] for c in w if c in char_to_id]
+                 for w in str_words]
+        caps = [cap_feature(w) for w in str_words]
+        tags = [tag_to_id[w[-1]] for w in s]
+        data.append({
+            'str_words': str_words,
+            'words': words,
+            'chars': chars,
+            'caps': caps,
+            'tags': tags,
+        })
+    return data
+
+
+def augment_with_pretrained(dictionary, ext_emb_path, words):
+    """
+    Augment the dictionary with words that have a pretrained embedding.
+    If `words` is None, we add every word that has a pretrained embedding
+    to the dictionary, otherwise, we only add the words that are given by
+    `words` (typically the words in the development and test sets.)
+    """
+    print('Loading pretrained embeddings from %s...' % ext_emb_path)
+    assert os.path.isfile(ext_emb_path)
+
+    # Load pretrained embeddings from file
+    pretrained = set([
+        line.rstrip().split()[0].strip()
+        for line in codecs.open(ext_emb_path, 'r', 'utf-8')
+        if len(ext_emb_path) > 0
+    ])
+    
+    if words is None:
+        for word in pretrained:
+            if word not in dictionary:
+                dictionary[word] = 0
+    else:
+        for word in words:
+            if any(x in pretrained for x in [
+                word,
+                word.lower(),
+                re.sub('\d', '0', word.lower())
+            ]) and word not in dictionary:
+                dictionary[word] = 0
+
+    word_to_id, id_to_word = create_mapping(dictionary)
+    return dictionary, word_to_id, id_to_word
+
+
+def pad_seq(seq, max_length, PAD_token=0):
+    
+    seq += [PAD_token for i in range(max_length - len(seq))]
+    return seq
+
+def get_batch(start, batch_size, datas, singletons=[]):
+    input_seqs = []
+    target_seqs = []
+    chars2_seqs = []
+
+    for data in datas[start:start+batch_size]:
+        # pair is chosen from pairs randomly
+        words = []
+        for word in data['words']:
+            if word in singletons and np.random.uniform() < 0.5:
+                words.append(1)
+            else:
+                words.append(word)
+        input_seqs.append(data['words'])
+        target_seqs.append(data['tags'])
+        chars2_seqs.append(data['chars'])
+
+    if input_seqs == []:
+        return [], [], [], [], [], []
+    seq_pairs = sorted(zip(input_seqs, target_seqs, chars2_seqs), key=lambda p: len(p[0]), reverse=True)
+    input_seqs, target_seqs, chars2_seqs = zip(*seq_pairs)
+
+    chars2_seqs_lengths = []
+    chars2_seqs_padded = []
+    for chars2 in chars2_seqs:
+        chars2_lengths = [len(c) for c in chars2]
+        chars2_padded = [pad_seq(c, max(chars2_lengths)) for c in chars2]
+        chars2_seqs_padded.append(chars2_padded)
+        chars2_seqs_lengths.append(chars2_lengths)
+
+    input_lengths = [len(s) for s in input_seqs]
+    # input_padded is batch * max_length
+    input_padded = [pad_seq(s, max(input_lengths)) for s in input_seqs]
+    target_lengths = [len(s) for s in target_seqs]
+    assert target_lengths == input_lengths
+    # target_padded is batch * max_length
+    target_padded = [pad_seq(s, max(target_lengths)) for s in target_seqs]
+
+    return input_padded, input_lengths, target_padded, target_lengths, chars2_seqs_padded, chars2_seqs_lengths
+
+
+def random_batch(batch_size, train_data, singletons=[]):
+    input_seqs = []
+    target_seqs = []
+    chars2_seqs = []
+
+
+    for i in range(batch_size):
+        # pair is chosen from pairs randomly
+        data = random.choice(train_data)
+        words = []
+        for word in data['words']:
+            if word in singletons and np.random.uniform() < 0.5:
+                words.append(1)
+            else:
+                words.append(word)
+        input_seqs.append(data['words'])
+        target_seqs.append(data['tags'])
+        chars2_seqs.append(data['chars'])
+
+    seq_pairs = sorted(zip(input_seqs, target_seqs, chars2_seqs), key=lambda p: len(p[0]), reverse=True)
+    input_seqs, target_seqs, chars2_seqs = zip(*seq_pairs)
+
+    chars2_seqs_lengths = []
+    chars2_seqs_padded = []
+    for chars2 in chars2_seqs:
+        chars2_lengths = [len(c) for c in chars2]
+        chars2_padded = [pad_seq(c, max(chars2_lengths)) for c in chars2]
+        chars2_seqs_padded.append(chars2_padded)
+        chars2_seqs_lengths.append(chars2_lengths)
+
+    input_lengths = [len(s) for s in input_seqs]
+    # input_padded is batch * max_length
+    input_padded = [pad_seq(s, max(input_lengths)) for s in input_seqs]
+    target_lengths = [len(s) for s in target_seqs]
+    assert target_lengths == input_lengths
+    # target_padded is batch * max_length
+    target_padded = [pad_seq(s, max(target_lengths)) for s in target_seqs]
+
+    return input_padded, input_lengths, target_padded, target_lengths, chars2_seqs_padded, chars2_seqs_lengths
+
+def to_scalar(var):
+    return var.view(-1).data.tolist()[0]
+
+def argmax(vec):
+    _, idx = torch.max(vec, 1)
+    return to_scalar(idx)
+
+def log_sum_exp(vec):
+    max_score = vec[0, argmax(vec)]
+    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
+    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))

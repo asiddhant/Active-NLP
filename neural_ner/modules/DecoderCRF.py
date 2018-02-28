@@ -2,21 +2,21 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-class DecoderCRF(nn.Module):
-    
-    START_TAG = '<START>'
-    STOP_TAG = '<STOP>'
+from neural_ner.util.utils import *
 
-    def __init__(self, input_dimension, tagset_size, input_dropout_p=0.5):
+class DecoderCRF(nn.Module):
+
+    def __init__(self, input_dimension, tag_to_ix, input_dropout_p=0.5):
         
-        super(CharEncoderCNN, self).__init__()
+        super(DecoderCRF, self).__init__()
         
-        self.tagset_size = tagset_size
+        self.tag_to_ix = tag_to_ix
+        self.tagset_size = len(tag_to_ix)
         
         self.dropout = nn.Dropout(input_dropout_p)
-        self.hidden2tag = nn.Linear(input_dimension, tagset_size)
+        self.hidden2tag = nn.Linear(input_dimension, self.tagset_size)
         
-        self.transitions = nn.Parameter(torch.zeros(tagset_size, tagset_size))
+        self.transitions = nn.Parameter(torch.zeros(self.tagset_size, self.tagset_size))
         self.transitions.data[tag_to_ix[START_TAG], :] = -10000
         self.transitions.data[:, tag_to_ix[STOP_TAG]] = -10000
     
@@ -59,7 +59,7 @@ class DecoderCRF(nn.Module):
         
         return path_score, best_path
     
-    def crf_forward(self, features):
+    def crf_forward(self, feats):
         
         init_alphas = torch.Tensor(1, self.tagset_size).fill_(-10000.)
         init_alphas[0][self.tag_to_ix[START_TAG]] = 0.

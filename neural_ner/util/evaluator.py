@@ -1,11 +1,12 @@
 import os
+import codecs
 
 class Evaluator(object):
     def __init__(self, result_path, model_name):
-        self.result_path = os.path.join('..',result_path)
+        self.result_path = result_path
         self.model_name = model_name
 
-    def evaluate_conll(self, model, dataset, best_F, eval_script='../../datasets/conll/conlleval'):
+    def evaluate_conll(self, model, dataset, best_F, eval_script='datasets/conll/conlleval'):
         
         prediction = []
         save = False

@@ -8,9 +8,8 @@ import neural_ner
 from neural_ner.util import Initializer
 from neural_ner.util import Loader
 from neural_ner.modules import CharEncoderCNN
-from neural_ner.modules import WordEncoderCNN
+from neural_ner.modules import WordEncoderRNN
 from neural_ner.modules import DecoderCRF
-
 
 class CNN_BiLSTM_CRF(nn.Module):
     
@@ -31,6 +30,7 @@ class CNN_BiLSTM_CRF(nn.Module):
         self.cap_input_dim = cap_input_dim
         self.cap_embedding_dim = cap_embedding_dim
         
+        self.tag_to_ix = tag_to_id
         self.tagset_size = len(tag_to_id)
         
         self.initializer = Initializer()
@@ -38,7 +38,7 @@ class CNN_BiLSTM_CRF(nn.Module):
         
         if self.cap_input_dim and self.cap_embedding_dim:
             self.cap_embedder = nn.Embedding(self.cap_input_dim, self.cap_embedding_dim)
-            initializer.init_embedding(self.cap_embedder.weight)
+            self.initializer.init_embedding(self.cap_embedder.weight)
         
         self.char_encoder = CharEncoderCNN(char_vocab_size, char_embedding_dim, char_out_channels, 
                                            kernel_width=3, pad_width=2)
@@ -48,12 +48,12 @@ class CNN_BiLSTM_CRF(nn.Module):
         self.word_encoder = WordEncoderRNN(word_vocab_size, word_embedding_dim ,word_hidden_dim, 
                                            char_out_channels, input_dropout_p=0.5)
         
-        if pretrained:
+        if pretrained is not None:
             self.word_encoder.embedding.weight = nn.Parameter(torch.FloatTensor(pretrained))
             
         self.initializer.init_lstm(self.word_encoder.rnn)
         
-        self.decoder = DecoderCRF(word_hidden_dim*2, self.tagset_size)
+        self.decoder = DecoderCRF(word_hidden_dim*2, self.tag_to_ix)
         
     def forward(self, sentence, tags, chars, caps):
         
@@ -61,8 +61,8 @@ class CNN_BiLSTM_CRF(nn.Module):
         tags = Variable(torch.LongTensor(tags)).cuda()
         caps = Variable(torch.LongTensor(caps))
         
-        chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
         chars_mask, _, _ = self.loader.pad_sequence_cnn(chars)
+        chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
         
         if self.cap_input_dim and self.cap_embedding_dim:
             cap_features = self.cap_embedder(caps)
@@ -82,8 +82,8 @@ class CNN_BiLSTM_CRF(nn.Module):
         tags = Variable(torch.LongTensor(tags)).cuda()
         caps = Variable(torch.LongTensor(caps))
         
-        chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
         chars_mask, _, _ = self.loader.pad_sequence_cnn(chars)
+        chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
         
         if self.cap_input_dim and self.cap_embedding_dim:
             cap_features = self.cap_embedder(caps)
