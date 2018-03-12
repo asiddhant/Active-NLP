@@ -28,7 +28,7 @@ class DecoderCRF(nn.Module):
         init_vars[0][self.tag_to_ix[START_TAG]] = 0
         forward_var = Variable(init_vars).cuda()
         
-        for feat in feats:
+        for feat in features:
             next_tag_var = forward_var.view(1, -1).expand(self.tagset_size, 
                                       self.tagset_size) + self.transitions
             _, bptrs_t = torch.max(next_tag_var, dim=1)
@@ -83,7 +83,7 @@ class DecoderCRF(nn.Module):
         pad_start_tags = torch.cat([torch.cuda.LongTensor([self.tag_to_ix[START_TAG]]), tags])
         pad_stop_tags = torch.cat([tags, torch.cuda.LongTensor([self.tag_to_ix[STOP_TAG]])])
 
-        score = torch.sum(self.transitions[pad_stop_tags, pad_start_tags]) + torch.sum(feats[r, tags])
+        score = torch.sum(self.transitions[pad_stop_tags, pad_start_tags]) + torch.sum(features[r, tags])
         return score
     
     def decode(self, input_var, tags, input_lengths=None):

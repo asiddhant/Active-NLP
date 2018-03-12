@@ -58,8 +58,8 @@ class CNN_BiLSTM_CRF(nn.Module):
     def forward(self, sentence, tags, chars, caps):
         
         sentence = Variable(torch.LongTensor(sentence)).cuda()
-        tags = Variable(torch.LongTensor(tags)).cuda()
-        caps = Variable(torch.LongTensor(caps))
+        tags = torch.LongTensor(tags).cuda()
+        caps = Variable(torch.LongTensor(caps)).cuda()
         
         chars_mask, _, _ = self.loader.pad_sequence_cnn(chars)
         chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
@@ -79,7 +79,7 @@ class CNN_BiLSTM_CRF(nn.Module):
     def decode(self, sentence, tags, chars, caps):
         
         sentence = Variable(torch.LongTensor(sentence)).cuda()
-        tags = Variable(torch.LongTensor(tags)).cuda()
+        tags = torch.LongTensor(tags).cuda()
         caps = Variable(torch.LongTensor(caps))
         
         chars_mask, _, _ = self.loader.pad_sequence_cnn(chars)

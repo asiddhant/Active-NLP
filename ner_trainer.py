@@ -11,19 +11,19 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--dataset', action='store', dest='dataset', default='conll',
+parser.add_argument('--dataset', action='store', dest='dataset', default='conll', type=str,
                     help='Dataset to be Used')
 parser.add_argument('--result_path', action='store', dest='result_path', default='neural_ner/results',
-                    help='Path to Save/Load Result')
-parser.add_argument('--usemodel', default='CNN_BiLSTM_CRF', 
+                    type=str, help='Path to Save/Load Result')
+parser.add_argument('--usemodel', default='CNN_BiLSTM_CRF', type=str,
                     help='Model to Use')
-parser.add_argument('--worddim', default=100,
+parser.add_argument('--worddim', default=100, type=int,
                     help="Word Embedding Dimension")
-parser.add_argument('--pretrnd', default="wordvectors/glove.6B.100d.txt",
+parser.add_argument('--pretrnd', default="wordvectors/glove.6B.100d.txt", type=str,
                     help="Location of pretrained embeddings")
-parser.add_argument('--reload', default=0, 
+parser.add_argument('--reload', default=0, type=int,
                     help="Reload the last saved model")
-parser.add_argument('--num_epochs', default=100, 
+parser.add_argument('--num_epochs', default=10, type=int,
                     help="Reload the last saved model")
 
 parameters = OrderedDict()
@@ -80,10 +80,12 @@ if parameters['rload']:
     model.load_state_dict(torch.load(model_path))
     
 model.cuda()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.015, momentum=0.9)
+learning_rate = 0.015
+optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
-trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset) 
-losses, all_F = trainer.train_single(opt.num_epochs, train_data, dev_data, test_train_data)
+trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings) 
+losses, all_F = trainer.train_single(opt.num_epochs, train_data, dev_data, test_train_data, test_data,
+                                    learning_rate = learning_rate)
     
 plt.plot(losses)
-plt.savefig(os.path.join(result_path, model_name + '_' + opt.dataset + '_' + 'loss.png'))
+plt.savefig(os.path.join(result_path,'_'.join([model_name, opt.dataset, 'loss.png'])))

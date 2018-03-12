@@ -159,6 +159,7 @@ class Loader(object):
                 mappings = {
                     'word_to_id': word_to_id,
                     'tag_to_id': tag_to_id,
+                    'id_to_tag': id_to_tag,
                     'char_to_id': char_to_id,
                     'parameters': parameters,
                     'word_embeds': word_embeds
