@@ -1,0 +1,55 @@
+import torch
+import torch.nn as nn
+from torch.autograd import Variable
+
+from neural_ner.util.utils import *
+
+class DecoderRNN(nn.Module):
+    def __init__(self, input_size ,hidden_size, tag_size, tag_to_ix, input_dropout_p=0, 
+                 output_dropout_p=0, n_layers=1):
+        super(DecoderRNN, self).__init__()
+        
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+        
+        self.input_dropout_p = input_dropout_p
+        self.output_dropout_p = output_dropout_p
+        
+        self.tag_to_ix = tag_to_ix
+        self.tagset_size = len(tag_to_ix)
+        
+        self.dropout = nn.Dropout(input_dropout_p)
+        
+        self.rnn = nn.LSTM(input_size + tag_size, hidden_size, n_layers, bidirectional=False)
+        self.linear = nn.Linear(hidden_size, tag_size)
+        self.lossfunc = nn.CrossEntropyLoss()
+        
+    def forward_step(self, input_var, prev_tag, hidden):
+        
+        prev_tag_onehot = torch.eye(self.tagset_size)
+        prev_tag_onehot = prev_tag_onehot.index_select(0,torch.LongTensor([prev_tag]))
+        prev_tag_onehot = Variable(prev_tag_onehot).cuda()
+        
+        decoder_input = torch.cat([input_var, prev_tag_onehot],1).unsqueeze(1)
+        output, hidden = self.rnn(decoder_input, hidden)
+        output = self.linear(output.view(-1, self.hidden_size))
+        output_tag = output.max(1)[1].data[0]
+    
+        return output, output_tag, hidden
+        
+    def forward(self, input_var, tags):
+        
+        input_var = self.dropout(input_var)
+        max_length = input_var.size(0)
+        loss = 0.0
+        tag_seq = []
+        prev_tag = self.tag_to_ix[START_TAG]
+        hidden = None
+        for i in range(max_length):
+            output, prev_tag, hidden=self.forward_step(input_var[i].unsqueeze(0), prev_tag, hidden)
+            tag_seq.append(prev_tag)
+            loss += self.lossfunc(output, tags[i])
+        loss/=max_length
+        
+        return loss, tag_seq

@@ -10,7 +10,8 @@ class Evaluator(object):
         self.tag_to_id = mappings['tag_to_id']
         self.id_to_tag = mappings['id_to_tag']
 
-    def evaluate_conll(self, model, dataset, best_F, eval_script='./datasets/conll/conlleval'):
+    def evaluate_conll(self, model, dataset, best_F, eval_script='./datasets/conll/conlleval',
+                      checkpoint_folder='.'):
         
         prediction = []
         save = False
@@ -35,8 +36,8 @@ class Evaluator(object):
                 confusion_matrix[true_id, pred_id] += 1
             prediction.append('')
         
-        predf = os.path.join(self.result_path, 'pred.' + self.model_name)
-        scoref = os.path.join(self.result_path, 'score.' + self.model_name)
+        predf = os.path.join(self.result_path, self.model_name, checkpoint_folder ,'pred.txt')
+        scoref = os.path.join(self.result_path, self.model_name, checkpoint_folder ,'score.txt')
 
         with open(predf, 'wb') as f:
             f.write('\n'.join(prediction))

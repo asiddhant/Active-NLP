@@ -1,5 +1,7 @@
 from __future__ import print_function
 import os
+import torch
+torch.manual_seed(0)
 import torch.nn as nn
 from torch.nn import init
 from torch.autograd import Variable
@@ -90,7 +92,7 @@ class Loader(object):
                 sentences.append(sentence)
         return sentences
     
-    def load_conll(self, dataset ,parameters, results_path):
+    def load_conll(self, dataset ,parameters):
         
         zeros = parameters['zeros']
         lower = parameters['lower']
@@ -136,7 +138,7 @@ class Loader(object):
         print("%i / %i / %i sentences in train / dev / test." % (
               len(train_data), len(dev_data), len(test_data)))
         
-        mapping_file = os.path.join(results_path,'mapping.pkl')
+        mapping_file = os.path.join(dataset,'mapping.pkl')
         
         if not os.path.isfile(mapping_file):
             all_word_embeds = {}

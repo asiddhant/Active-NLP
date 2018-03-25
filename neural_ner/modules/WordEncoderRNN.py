@@ -15,7 +15,7 @@ class WordEncoderRNN(baseRNN):
         
         augmented_embedding_size = embedding_size + char_size + cap_size
         self.rnn = self.rnn_cell(augmented_embedding_size, hidden_size, n_layers,
-                                 batch_first=True, bidirectional=bidirectional, dropout=output_dropout_p)
+                                 bidirectional=bidirectional, dropout=output_dropout_p)
 
     def forward(self, sentence, char_embedding, cap_embedding=None ,input_lengths=None):
         

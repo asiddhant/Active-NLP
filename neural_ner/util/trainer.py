@@ -1,21 +1,19 @@
 from __future__ import print_function
-import torch.nn as nn
-from torch.nn import init
 from torch.autograd import Variable
 import time
 from evaluator import Evaluator
 import sys
 import os
 import numpy as np
+np.random.seed(0)
 import torch
+import torch.nn as nn
 
 class Trainer(object):
     
-    def __init__(self, model, optimizer, result_path, model_name, usedataset, mappings,
-                 plot_every=500, eval_every=1):
+    def __init__(self, model, optimizer, result_path, model_name, usedataset, mappings, eval_every=1):
         self.model = model
         self.optimizer = optimizer
-        self.plot_every = plot_every
         self.eval_every = eval_every
         self.model_name = os.path.join(result_path, model_name)
         
@@ -26,7 +24,8 @@ class Trainer(object):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
             
-    def train_single(self, num_epochs, train_data, dev_data, test_train_data, test_data, learning_rate):
+    def train_single(self, num_epochs, train_data, dev_data, test_train_data, test_data, learning_rate,
+                     checkpoint_folder='.', eval_test_train=True, plot_every=1000):
         
         losses = []
         loss = 0.0
@@ -58,8 +57,8 @@ class Trainer(object):
                 
                 count += 1
                 
-                if count % self.plot_every == 0:
-                    loss /= self.plot_every
+                if count % plot_every == 0:
+                    loss /= plot_every
                     print(count, ': ', loss)
                     if losses == []:
                         losses.append(loss)
@@ -73,11 +72,17 @@ class Trainer(object):
                 
                 self.model.train(False)
                 
-                best_train_F, new_train_F, _ = self.evaluator(self.model, test_train_data, best_train_F)
-                best_dev_F, new_dev_F, save = self.evaluator(self.model, dev_data, best_dev_F)
+                if eval_test_train:
+                    best_train_F, new_train_F, _ = self.evaluator(self.model, test_train_data, best_train_F,
+                                                                 checkpoint_folder=checkpoint_folder)
+                else:
+                    best_train_F, new_train_F, _ = 0, 0, 0
+                best_dev_F, new_dev_F, save = self.evaluator(self.model, dev_data, best_dev_F,
+                                                            checkpoint_folder=checkpoint_folder)
                 if save:
-                    torch.save(self.model, self.model_name)
-                best_test_F, new_test_F, _ = self.evaluator(self.model, test_data, best_test_F)
+                    torch.save(self.model, os.path.join(self.model_name, checkpoint_folder, 'modelweights'))
+                best_test_F, new_test_F, _ = self.evaluator(self.model, test_data, best_test_F,
+                                                           checkpoint_folder=checkpoint_folder)
                 sys.stdout.flush()
 
                 all_F.append([new_train_F, new_dev_F, new_test_F])

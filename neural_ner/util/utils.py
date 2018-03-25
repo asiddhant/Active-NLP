@@ -2,8 +2,11 @@ from __future__ import print_function
 import os
 import re
 import numpy as np
+np.random.seed(0)
 import codecs
 import torch
+import random
+random.seed(0)
 
 START_TAG = '<START>'
 STOP_TAG = '<STOP>'
