@@ -54,18 +54,27 @@ class CNN_CNN_LSTM(nn.Module):
             self.word_encoder.embedding.weight = nn.Parameter(torch.FloatTensor(pretrained))
         
         augmented_decoder_inp_size = (word_out2_channels + word_embedding_dim + 
-                                      char_embedding_dim + cap_embedding_dim)
+                                      char_out_channels + cap_embedding_dim)
         self.decoder = DecoderRNN(augmented_decoder_inp_size, decoder_hidden_units, self.tagset_size, 
-                                  self.tag_to_ix)
+                                  self.tag_to_ix, input_dropout_p=0.5)
         
-    def forward(self, sentence, tags, chars, caps):
+    def forward(self, sentence, tags, chars, caps, usecuda=True):
         
-        sentence = Variable(torch.LongTensor(sentence)).cuda()
-        tags = Variable(torch.LongTensor(tags)).cuda()
-        caps = Variable(torch.LongTensor(caps)).cuda()
-        
+        if usecuda:
+            sentence = Variable(torch.LongTensor(sentence)).cuda()
+            tags = torch.LongTensor(tags).cuda()
+            caps = Variable(torch.LongTensor(caps)).cuda()
+        else:
+            sentence = Variable(torch.LongTensor(sentence))
+            tags = torch.LongTensor(tags)
+            caps = Variable(torch.LongTensor(caps))
+            
         chars_mask, _, _ = self.loader.pad_sequence_cnn(chars)
-        chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
+        
+        if usecuda:
+            chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
+        else:
+            chars_mask = Variable(torch.LongTensor(chars_mask))
         
         if self.cap_input_dim and self.cap_embedding_dim:
             cap_features = self.cap_embedder(caps)
@@ -76,18 +85,27 @@ class CNN_CNN_LSTM(nn.Module):
         word_features, word_input_feats = self.word_encoder(sentence, char_features, cap_features)
         
         new_word_features = torch.cat((word_features,word_input_feats),1)
-        score, tag_seq = self.decoder(new_word_features, tags)
+        score, tag_seq = self.decoder(new_word_features, tags, usecuda=usecuda)
         
         return score
     
-    def decode(self, sentence, tags, chars, caps):
+    def decode(self, sentence, tags, chars, caps, usecuda=True):
         
-        sentence = Variable(torch.LongTensor(sentence)).cuda()
-        tags = Variable(torch.LongTensor(tags)).cuda()
-        caps = Variable(torch.LongTensor(caps)).cuda()
-        
+        if usecuda:
+            sentence = Variable(torch.LongTensor(sentence)).cuda()
+            tags = torch.LongTensor(tags).cuda()
+            caps = Variable(torch.LongTensor(caps)).cuda()
+        else:
+            sentence = Variable(torch.LongTensor(sentence))
+            tags = torch.LongTensor(tags)
+            caps = Variable(torch.LongTensor(caps))
+            
         chars_mask, _, _ = self.loader.pad_sequence_cnn(chars)
-        chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
+        
+        if usecuda:
+            chars_mask = Variable(torch.LongTensor(chars_mask)).cuda()
+        else:
+            chars_mask = Variable(torch.LongTensor(chars_mask))
         
         if self.cap_input_dim and self.cap_embedding_dim:
             cap_features = self.cap_embedder(caps)
@@ -98,7 +116,7 @@ class CNN_CNN_LSTM(nn.Module):
         word_features, word_input_feats = self.word_encoder(sentence, char_features, cap_features)
         
         new_word_features = torch.cat((word_features,word_input_feats),1)
-        score, tag_seq = self.decoder(new_word_features, tags)
+        score, tag_seq = self.decoder(new_word_features, tags, usecuda=usecuda)
         
         return score, tag_seq
         

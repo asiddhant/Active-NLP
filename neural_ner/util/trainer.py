@@ -25,7 +25,7 @@ class Trainer(object):
             param_group['lr'] = lr
             
     def train_single(self, num_epochs, train_data, dev_data, test_train_data, test_data, learning_rate,
-                     checkpoint_folder='.', eval_test_train=True, plot_every=1000):
+                     checkpoint_folder='.', eval_test_train=True, plot_every=1000, adjust_lr=True):
         
         losses = []
         loss = 0.0
@@ -65,7 +65,7 @@ class Trainer(object):
                     losses.append(loss)
                     loss = 0.0
                     
-                if count % len(train_data) == 0:
+                if adjust_lr and count % len(train_data) == 0:
                     self.adjust_learning_rate(self.optimizer, lr=learning_rate/(1+0.05*count/len(train_data)))
             
             if epoch%self.eval_every==0:
@@ -73,19 +73,20 @@ class Trainer(object):
                 self.model.train(False)
                 
                 if eval_test_train:
-                    best_train_F, new_train_F, _ = self.evaluator(self.model, test_train_data, best_train_F,
-                                                                 checkpoint_folder=checkpoint_folder)
+                    best_train_F, new_train_F, _ = self.evaluator(self.model, test_train_data, best_train_F, 
+                                                                  checkpoint_folder=checkpoint_folder)
                 else:
                     best_train_F, new_train_F, _ = 0, 0, 0
                 best_dev_F, new_dev_F, save = self.evaluator(self.model, dev_data, best_dev_F,
-                                                            checkpoint_folder=checkpoint_folder)
+                                                             checkpoint_folder=checkpoint_folder)
                 if save:
                     torch.save(self.model, os.path.join(self.model_name, checkpoint_folder, 'modelweights'))
                 best_test_F, new_test_F, _ = self.evaluator(self.model, test_data, best_test_F,
-                                                           checkpoint_folder=checkpoint_folder)
+                                                            checkpoint_folder=checkpoint_folder)
                 sys.stdout.flush()
 
                 all_F.append([new_train_F, new_dev_F, new_test_F])
+                
                 self.model.train(True)
 
             print('*'*80)

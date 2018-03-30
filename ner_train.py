@@ -4,6 +4,7 @@ import os
 import neural_ner
 from neural_ner.util import Trainer, Loader
 from neural_ner.models import CNN_BiLSTM_CRF
+from neural_ner.models import CNN_BiLSTM_CRF_MC
 from neural_ner.models import CNN_CNN_LSTM
 import matplotlib.pyplot as plt
 import torch
@@ -29,28 +30,60 @@ parser.add_argument('--checkpoint', default=".", type=str, dest='checkpoint',
 parser.add_argument('--num_epochs', default=10, type=int, dest='num_epochs',
                     help="Reload the last saved model")
 
-parameters = OrderedDict()
-
 opt = parser.parse_args()
+
+parameters = OrderedDict()
 
 parameters['model'] = opt.usemodel
 parameters['wrdim'] = opt.worddim
 parameters['ptrnd'] = opt.pretrnd
 
-parameters['lower'] = 1
-parameters['zeros'] = 0
-parameters['cpdim'] = 0
-parameters['dpout'] = 0.5
-parameters['chdim'] = 25
-parameters['tgsch'] = 'iobes'
+if opt.usemodel == 'CNN_BiLSTM_CRF':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
 
-parameters['wldim'] = 200
-parameters['cldim'] = 25
+    parameters['wldim'] = 200
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 25
+    
+    parameters['lrate'] = 0.015
+    
+elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
 
-parameters['w1chl'] = 50
-parameters['w2chl'] = 200
-parameters['cnchl'] = 25
-parameters['dchid'] = 200
+    parameters['wldim'] = 200
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 25
+    
+    parameters['lrate'] = 0.015
+
+elif opt.usemodel == 'CNN_CNN_LSTM':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
+    
+    parameters['w1chl'] = 400
+    parameters['w2chl'] = 400
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 50
+    parameters['dchid'] = 50
+    
+    parameters['lrate'] = 0.01
+    
+else:
+    raise NotImplementedError()
 
 use_dataset = opt.dataset
 dataset_path = os.path.join('datasets', use_dataset)
@@ -74,7 +107,6 @@ if opt.dataset == 'conll':
 word_to_id = mappings['word_to_id']
 tag_to_id = mappings['tag_to_id']
 char_to_id = mappings['char_to_id']
-parameters = mappings['parameters']
 word_embeds = mappings['word_embeds']
 
 print('Load Complete')
@@ -96,6 +128,18 @@ else:
 
         model = CNN_BiLSTM_CRF(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
                                char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_BiLSTM_CRF_MC'):
+        print ('CNN_BiLSTM_CRF_MC')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_hidden_dim = parameters['wldim']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+
+        model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                               char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
 
     elif (model_name == 'CNN_CNN_LSTM'):
         print ('CNN_CNN_LSTM')
@@ -112,13 +156,15 @@ else:
                              char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
                              tag_to_id, pretrained = word_embeds)
     
+    
 model.cuda()
-learning_rate = 0.015
+learning_rate = parameters['lrate']
+print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
 trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings) 
 losses, all_F = trainer.train_single(opt.num_epochs, train_data, dev_data, test_train_data, test_data,
-                                    learning_rate = learning_rate)
+                                     learning_rate = learning_rate)
     
 plt.plot(losses)
 plt.savefig(os.path.join(result_path, model_name, 'lossplot.png'))

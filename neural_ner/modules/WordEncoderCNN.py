@@ -3,8 +3,8 @@ import torch.nn as nn
 
 class WordEncoderCNN(nn.Module):
 
-    def __init__(self, vocab_size, embedding_size, char_size, kernel_width = 3, pad_width = 2, 
-                 in_channels=1, out1_channels=50, out2_channels=200, cap_size=0, input_dropout_p=0.5, 
+    def __init__(self, vocab_size, embedding_size, char_size, kernel_width = 5, pad_width = 4, 
+                 in_channels=1, out1_channels=800, out2_channels=800, cap_size=0, input_dropout_p=0.5, 
                  output_dropout_p=0):
         
         super(WordEncoderCNN, self).__init__()

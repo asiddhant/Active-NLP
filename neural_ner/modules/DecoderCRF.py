@@ -20,13 +20,16 @@ class DecoderCRF(nn.Module):
         self.transitions.data[tag_to_ix[START_TAG], :] = -10000
         self.transitions.data[:, tag_to_ix[STOP_TAG]] = -10000
     
-    def viterbi_decode(self, features):
+    def viterbi_decode(self, features, usecuda = True):
         
         backpointers = []
         
         init_vars = torch.Tensor(1, self.tagset_size).fill_(-10000.)
         init_vars[0][self.tag_to_ix[START_TAG]] = 0
-        forward_var = Variable(init_vars).cuda()
+        if usecuda:
+            forward_var = Variable(init_vars).cuda()
+        else:
+            forward_var = Variable(init_vars)
         
         for feat in features:
             next_tag_var = forward_var.view(1, -1).expand(self.tagset_size, 
@@ -37,7 +40,10 @@ class DecoderCRF(nn.Module):
             next_tag_var = next_tag_var.data.cpu().numpy()
             
             viterbivars_t = next_tag_var[range(len(bptrs_t)), bptrs_t]
-            viterbivars_t = Variable(torch.FloatTensor(viterbivars_t)).cuda()
+            if usecuda:
+                viterbivars_t = Variable(torch.FloatTensor(viterbivars_t)).cuda()
+            else:
+                viterbivars_t = Variable(torch.FloatTensor(viterbivars_t))
             
             forward_var = viterbivars_t + feat
             backpointers.append(bptrs_t)
@@ -59,7 +65,7 @@ class DecoderCRF(nn.Module):
         
         return path_score, best_path
     
-    def crf_forward(self, feats):
+    def crf_forward(self, feats, usecuda=True):
         
         init_alphas = torch.Tensor(1, self.tagset_size).fill_(-10000.)
         init_alphas[0][self.tag_to_ix[START_TAG]] = 0.
@@ -77,28 +83,32 @@ class DecoderCRF(nn.Module):
         
         return alpha
     
-    def score_sentence(self, features, tags):
-        
-        r = torch.LongTensor(range(features.size()[0])).cuda()
-        pad_start_tags = torch.cat([torch.cuda.LongTensor([self.tag_to_ix[START_TAG]]), tags])
-        pad_stop_tags = torch.cat([tags, torch.cuda.LongTensor([self.tag_to_ix[STOP_TAG]])])
+    def score_sentence(self, features, tags, usecuda=True):
+        if usecuda:
+            r = torch.LongTensor(range(features.size()[0])).cuda()
+            pad_start_tags = torch.cat([torch.cuda.LongTensor([self.tag_to_ix[START_TAG]]), tags])
+            pad_stop_tags = torch.cat([tags, torch.cuda.LongTensor([self.tag_to_ix[STOP_TAG]])])
+        else:
+            r = torch.LongTensor(range(features.size()[0]))
+            pad_start_tags = torch.cat([torch.LongTensor([self.tag_to_ix[START_TAG]]), tags])
+            pad_stop_tags = torch.cat([tags, torch.LongTensor([self.tag_to_ix[STOP_TAG]])])
 
         score = torch.sum(self.transitions[pad_stop_tags, pad_start_tags]) + torch.sum(features[r, tags])
         return score
     
-    def decode(self, input_var, tags, input_lengths=None):
+    def decode(self, input_var, tags, input_lengths=None, usecuda=True):
         
         input_var = self.dropout(input_var)
         features = self.hidden2tag(input_var)
-        score, tag_seq = self.viterbi_decode(features)
+        score, tag_seq = self.viterbi_decode(features, usecuda=usecuda)
         
         return score, tag_seq
     
-    def forward(self, input_var, tags, input_lengths=None):
+    def forward(self, input_var, tags, input_lengths=None, usecuda=True):
         
         input_var = self.dropout(input_var)
         features = self.hidden2tag(input_var)
-        forward_score = self.crf_forward(features)
-        ground_score = self.score_sentence(features, tags)
+        forward_score = self.crf_forward(features, usecuda=usecuda)
+        ground_score = self.score_sentence(features, tags, usecuda=usecuda)
         
         return forward_score-ground_score

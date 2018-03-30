@@ -5,7 +5,7 @@ from torch.autograd import Variable
 from neural_ner.util.utils import *
 
 class DecoderRNN(nn.Module):
-    def __init__(self, input_size ,hidden_size, tag_size, tag_to_ix, input_dropout_p=0, 
+    def __init__(self, input_size ,hidden_size, tag_size, tag_to_ix, input_dropout_p=0.5, 
                  output_dropout_p=0, n_layers=1):
         super(DecoderRNN, self).__init__()
         
@@ -25,11 +25,14 @@ class DecoderRNN(nn.Module):
         self.linear = nn.Linear(hidden_size, tag_size)
         self.lossfunc = nn.CrossEntropyLoss()
         
-    def forward_step(self, input_var, prev_tag, hidden):
+    def forward_step(self, input_var, prev_tag, hidden, usecuda=True):
         
         prev_tag_onehot = torch.eye(self.tagset_size)
         prev_tag_onehot = prev_tag_onehot.index_select(0,torch.LongTensor([prev_tag]))
-        prev_tag_onehot = Variable(prev_tag_onehot).cuda()
+        if usecuda:
+            prev_tag_onehot = Variable(prev_tag_onehot).cuda()
+        else:
+            prev_tag_onehot = Variable(prev_tag_onehot)
         
         decoder_input = torch.cat([input_var, prev_tag_onehot],1).unsqueeze(1)
         output, hidden = self.rnn(decoder_input, hidden)
@@ -38,7 +41,7 @@ class DecoderRNN(nn.Module):
     
         return output, output_tag, hidden
         
-    def forward(self, input_var, tags):
+    def forward(self, input_var, tags, usecuda=True):
         
         input_var = self.dropout(input_var)
         max_length = input_var.size(0)
@@ -47,7 +50,8 @@ class DecoderRNN(nn.Module):
         prev_tag = self.tag_to_ix[START_TAG]
         hidden = None
         for i in range(max_length):
-            output, prev_tag, hidden=self.forward_step(input_var[i].unsqueeze(0), prev_tag, hidden)
+            output, prev_tag, hidden=self.forward_step(input_var[i].unsqueeze(0), prev_tag, hidden, 
+                                                       usecuda=usecuda)
             tag_seq.append(prev_tag)
             loss += self.lossfunc(output, tags[i])
         loss/=max_length

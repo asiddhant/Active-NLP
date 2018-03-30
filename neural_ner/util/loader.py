@@ -100,12 +100,10 @@ class Loader(object):
         pretrained = parameters['ptrnd']
         tag_scheme = parameters['tgsch']
         
-        
         train_path = os.path.join(dataset,'eng.train')
         dev_path = os.path.join(dataset,'eng.testa')
         test_path = os.path.join(dataset,'eng.testb')
         test_train_path = os.path.join(dataset,'eng.train54019')
-        
         
         train_sentences = self.load_conll_sentences(train_path, lower, zeros)
         dev_sentences = self.load_conll_sentences(dev_path, lower, zeros)

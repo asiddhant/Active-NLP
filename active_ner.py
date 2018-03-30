@@ -4,6 +4,7 @@ import os
 import neural_ner
 from neural_ner.util import Trainer, Loader
 from neural_ner.models import CNN_BiLSTM_CRF
+from neural_ner.models import CNN_BiLSTM_CRF_MC
 from neural_ner.models import CNN_CNN_LSTM
 import matplotlib.pyplot as plt
 import torch
@@ -46,20 +47,56 @@ parameters['model'] = opt.usemodel
 parameters['wrdim'] = opt.worddim
 parameters['ptrnd'] = opt.pretrnd
 
-parameters['lower'] = 1
-parameters['zeros'] = 0
-parameters['cpdim'] = 0
-parameters['dpout'] = 0.5
-parameters['chdim'] = 25
-parameters['tgsch'] = 'iobes'
+if opt.usemodel == 'CNN_BiLSTM_CRF':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
 
-parameters['wldim'] = 200
-parameters['cldim'] = 25
+    parameters['wldim'] = 200
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 25
+    
+    parameters['lrate'] = 0.015
+    parameters['acqmd'] = 'd'
+    
+elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
 
-parameters['w1chl'] = 50
-parameters['w2chl'] = 200
-parameters['cnchl'] = 25
-parameters['dchid'] = 200
+    parameters['wldim'] = 200
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 25
+    
+    parameters['lrate'] = 0.015
+    parameters['acqmd'] = 'm'
+
+elif opt.usemodel == 'CNN_CNN_LSTM':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
+    
+    parameters['w1chl'] = 800
+    parameters['w2chl'] = 800
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 50
+    parameters['dchid'] = 20
+    
+    parameters['lrate'] = 0.001
+    parameters['acqmd'] = 'd'
+    
+else:
+    raise NotImplementedError()
+    
 
 use_dataset = opt.dataset
 dataset_path = os.path.join('datasets', use_dataset)
@@ -87,11 +124,12 @@ if not os.path.exists(os.path.join(result_path, model_name, 'active_checkpoint',
 
 if opt.dataset == 'conll':
     train_data, dev_data, test_data, test_train_data, mappings = loader.load_conll(dataset_path, parameters)
+else:
+    raise NotImplementedError()
 
 word_to_id = mappings['word_to_id']
 tag_to_id = mappings['tag_to_id']
 char_to_id = mappings['char_to_id']
-parameters = mappings['parameters']
 word_embeds = mappings['word_embeds']
 
 print('Load Complete')
@@ -108,7 +146,7 @@ if model_load:
     acquisition_function = pkl.load(open(acquisition_path,'rb'))
     
 else:
-    print('Building Model..........................................................................')
+    print('Building Model............................................................................')
     if (model_name == 'CNN_BiLSTM_CRF'):
         print ('CNN_BiLSTM_CRF')
         word_vocab_size = len(word_to_id)
@@ -119,6 +157,18 @@ else:
         char_out_channels = parameters['cnchl']
 
         model = CNN_BiLSTM_CRF(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                               char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_BiLSTM_CRF_MC'):
+        print ('CNN_BiLSTM_CRF_MC')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_hidden_dim = parameters['wldim']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+
+        model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
                                char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
 
     elif (model_name == 'CNN_CNN_LSTM'):
@@ -136,7 +186,7 @@ else:
                              char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
                              tag_to_id, pretrained = word_embeds)
         
-    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0)
+    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0, acq_mode = parameters['acqmd'])
     
 model.cuda()
 learning_rate = 0.015
