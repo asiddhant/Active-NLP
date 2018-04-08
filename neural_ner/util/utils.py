@@ -1,10 +1,11 @@
 from __future__ import print_function
 import os
 import re
-import numpy as np
-np.random.seed(0)
 import codecs
 import torch
+import copy
+import numpy as np
+np.random.seed(0)
 import random
 random.seed(0)
 
@@ -330,88 +331,7 @@ def pad_seq(seq, max_length, PAD_token=0):
     
     seq += [PAD_token for i in range(max_length - len(seq))]
     return seq
-
-def get_batch(start, batch_size, datas, singletons=[]):
-    input_seqs = []
-    target_seqs = []
-    chars2_seqs = []
-
-    for data in datas[start:start+batch_size]:
-        # pair is chosen from pairs randomly
-        words = []
-        for word in data['words']:
-            if word in singletons and np.random.uniform() < 0.5:
-                words.append(1)
-            else:
-                words.append(word)
-        input_seqs.append(data['words'])
-        target_seqs.append(data['tags'])
-        chars2_seqs.append(data['chars'])
-
-    if input_seqs == []:
-        return [], [], [], [], [], []
-    seq_pairs = sorted(zip(input_seqs, target_seqs, chars2_seqs), key=lambda p: len(p[0]), reverse=True)
-    input_seqs, target_seqs, chars2_seqs = zip(*seq_pairs)
-
-    chars2_seqs_lengths = []
-    chars2_seqs_padded = []
-    for chars2 in chars2_seqs:
-        chars2_lengths = [len(c) for c in chars2]
-        chars2_padded = [pad_seq(c, max(chars2_lengths)) for c in chars2]
-        chars2_seqs_padded.append(chars2_padded)
-        chars2_seqs_lengths.append(chars2_lengths)
-
-    input_lengths = [len(s) for s in input_seqs]
-    # input_padded is batch * max_length
-    input_padded = [pad_seq(s, max(input_lengths)) for s in input_seqs]
-    target_lengths = [len(s) for s in target_seqs]
-    assert target_lengths == input_lengths
-    # target_padded is batch * max_length
-    target_padded = [pad_seq(s, max(target_lengths)) for s in target_seqs]
-
-    return input_padded, input_lengths, target_padded, target_lengths, chars2_seqs_padded, chars2_seqs_lengths
-
-
-def random_batch(batch_size, train_data, singletons=[]):
-    input_seqs = []
-    target_seqs = []
-    chars2_seqs = []
-
-
-    for i in range(batch_size):
-        # pair is chosen from pairs randomly
-        data = random.choice(train_data)
-        words = []
-        for word in data['words']:
-            if word in singletons and np.random.uniform() < 0.5:
-                words.append(1)
-            else:
-                words.append(word)
-        input_seqs.append(data['words'])
-        target_seqs.append(data['tags'])
-        chars2_seqs.append(data['chars'])
-
-    seq_pairs = sorted(zip(input_seqs, target_seqs, chars2_seqs), key=lambda p: len(p[0]), reverse=True)
-    input_seqs, target_seqs, chars2_seqs = zip(*seq_pairs)
-
-    chars2_seqs_lengths = []
-    chars2_seqs_padded = []
-    for chars2 in chars2_seqs:
-        chars2_lengths = [len(c) for c in chars2]
-        chars2_padded = [pad_seq(c, max(chars2_lengths)) for c in chars2]
-        chars2_seqs_padded.append(chars2_padded)
-        chars2_seqs_lengths.append(chars2_lengths)
-
-    input_lengths = [len(s) for s in input_seqs]
-    # input_padded is batch * max_length
-    input_padded = [pad_seq(s, max(input_lengths)) for s in input_seqs]
-    target_lengths = [len(s) for s in target_seqs]
-    assert target_lengths == input_lengths
-    # target_padded is batch * max_length
-    target_padded = [pad_seq(s, max(target_lengths)) for s in target_seqs]
-
-    return input_padded, input_lengths, target_padded, target_lengths, chars2_seqs_padded, chars2_seqs_lengths
-
+    
 def to_scalar(var):
     return var.view(-1).data.tolist()[0]
 
@@ -419,7 +339,66 @@ def argmax(vec):
     _, idx = torch.max(vec, 1)
     return to_scalar(idx)
 
-def log_sum_exp(vec):
-    max_score = vec[0, argmax(vec)]
-    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
-    return max_score + torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+def log_sum_exp(vec, dim=-1, keepdim = False):
+    max_score, _ = vec.max(dim, keepdim=keepdim)
+    if keepdim:
+        stable_vec = vec - max_score
+    else:
+        stable_vec = vec - max_score.unsqueeze(dim)
+    output = max_score + (stable_vec.exp().sum(dim, keepdim=keepdim)).log()
+    return output
+
+def create_batches(dataset, batch_size, order='keep', str_words=False, tag_padded= True):
+
+    newdata = copy.deepcopy(dataset)
+    if order=='sort':
+        newdata.sort(key = lambda x:len(x['words']))
+    elif order=='random':
+        random.shuffle(newdata)
+
+    newdata = np.array(newdata)  
+    batches = []
+    num_batches = np.ceil(len(dataset)/float(batch_size)).astype('int')
+
+    for i in range(num_batches):
+        batch_data = newdata[(i*batch_size):min(len(dataset),(i+1)*batch_size)]
+
+        words_seqs = [itm['words'] for itm in batch_data]
+        caps_seqs = [itm['caps'] for itm in batch_data]
+        target_seqs = [itm['tags'] for itm in batch_data]
+        chars_seqs = [itm['chars'] for itm in batch_data]
+        str_words_seqs = [itm['str_words'] for itm in batch_data]
+
+        seq_pairs = sorted(zip(words_seqs, caps_seqs, target_seqs, chars_seqs, str_words_seqs), 
+                           key=lambda p: len(p[0]), reverse=True)
+
+        words_seqs, caps_seqs, target_seqs, chars_seqs, str_words_seqs = zip(*seq_pairs)
+        words_lengths = np.array([len(s) for s in words_seqs])
+
+        words_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in words_seqs])
+        caps_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in caps_seqs])
+
+        if tag_padded:
+            target_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in target_seqs])
+        else:
+            target_padded = target_seqs
+
+        words_mask = (words_padded!=0).astype('int')
+
+        chars_pseqs = [pad_seq(s, max(words_lengths), []) for s in chars_seqs]
+        chars_lengths = np.array([[len(s) for s in w] for w in chars_pseqs]).reshape(-1)
+        chars_padded = np.array([[pad_seq(s, np.max(chars_lengths)) 
+                                  for s in w] for w in chars_pseqs]).reshape(-1,np.max(chars_lengths))
+
+        if str_words:
+            outputdict = {'words':words_padded, 'caps':caps_padded, 'tags': target_padded, 
+                          'chars': chars_padded, 'wordslen': words_lengths, 'charslen': chars_lengths,
+                          'tagsmask':words_mask, 'str_words': str_words_seqs}
+        else:
+            outputdict = {'words':words_padded, 'caps':caps_padded, 'tags': target_padded, 
+                          'chars': chars_padded, 'wordslen': words_lengths, 'charslen': chars_lengths,
+                          'tagsmask':words_mask}
+
+        batches.append(outputdict)
+
+    return batches

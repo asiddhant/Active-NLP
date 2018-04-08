@@ -6,6 +6,7 @@ from neural_ner.util import Trainer, Loader
 from neural_ner.models import CNN_BiLSTM_CRF
 from neural_ner.models import CNN_BiLSTM_CRF_MC
 from neural_ner.models import CNN_CNN_LSTM
+from neural_ner.models import CNN_CNN_LSTM_MC
 import matplotlib.pyplot as plt
 import torch
 
@@ -51,6 +52,7 @@ if opt.usemodel == 'CNN_BiLSTM_CRF':
     parameters['cnchl'] = 25
     
     parameters['lrate'] = 0.015
+    parameters['batch_size'] = 16
     
 elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
     parameters['lower'] = 1
@@ -65,6 +67,7 @@ elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
     parameters['cnchl'] = 25
     
     parameters['lrate'] = 0.015
+    parameters['batch_size'] = 16
 
 elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['lower'] = 1
@@ -81,6 +84,24 @@ elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['dchid'] = 50
     
     parameters['lrate'] = 0.01
+    parameters['batch_size'] = 32
+    
+elif opt.usemodel == 'CNN_CNN_LSTM_MC':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
+    
+    parameters['w1chl'] = 400
+    parameters['w2chl'] = 400
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 50
+    parameters['dchid'] = 50
+    
+    parameters['lrate'] = 0.01
+    parameters['batch_size'] = 32
     
 else:
     raise NotImplementedError()
@@ -155,6 +176,21 @@ else:
         model = CNN_CNN_LSTM(word_vocab_size, word_embedding_dim, word_out1_channels, word_out2_channels,
                              char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
                              tag_to_id, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_CNN_LSTM_MC'):
+        print ('CNN_CNN_LSTM_MC')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_out1_channels = parameters['w1chl']
+        word_out2_channels = parameters['w2chl']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+        decoder_hidden_units = parameters['dchid']
+
+        model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out1_channels, word_out2_channels,
+                             char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
+                             tag_to_id, pretrained = word_embeds)
     
     
 model.cuda()
@@ -163,8 +199,8 @@ print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
 trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings) 
-losses, all_F = trainer.train_single(opt.num_epochs, train_data, dev_data, test_train_data, test_data,
-                                     learning_rate = learning_rate)
+losses, all_F = trainer.train_model(opt.num_epochs, train_data, dev_data, test_train_data, test_data,
+                                     learning_rate = learning_rate, batch_size = parameters['batch_size'])
     
 plt.plot(losses)
 plt.savefig(os.path.join(result_path, model_name, 'lossplot.png'))

@@ -6,6 +6,7 @@ from neural_ner.util import Trainer, Loader
 from neural_ner.models import CNN_BiLSTM_CRF
 from neural_ner.models import CNN_BiLSTM_CRF_MC
 from neural_ner.models import CNN_CNN_LSTM
+from neural_ner.models import CNN_CNN_LSTM_MC
 import matplotlib.pyplot as plt
 import torch
 from active_learning import Acquisition
@@ -60,6 +61,7 @@ if opt.usemodel == 'CNN_BiLSTM_CRF':
     parameters['cnchl'] = 25
     
     parameters['lrate'] = 0.015
+    parameters['batch_size'] = 16
     parameters['acqmd'] = 'd'
     
 elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
@@ -75,6 +77,7 @@ elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
     parameters['cnchl'] = 25
     
     parameters['lrate'] = 0.015
+    parameters['batch_size'] = 16
     parameters['acqmd'] = 'm'
 
 elif opt.usemodel == 'CNN_CNN_LSTM':
@@ -91,8 +94,27 @@ elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['cnchl'] = 50
     parameters['dchid'] = 20
     
-    parameters['lrate'] = 0.001
+    parameters['lrate'] = 0.01
+    parameters['batch_size'] = 32
     parameters['acqmd'] = 'd'
+    
+elif opt.usemodel == 'CNN_CNN_LSTM_MC':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
+    
+    parameters['w1chl'] = 400
+    parameters['w2chl'] = 400
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 50
+    parameters['dchid'] = 50
+    
+    parameters['lrate'] = 0.01
+    parameters['batch_size'] = 32
+    parameters['acqmd'] = 'm'
     
 else:
     raise NotImplementedError()
@@ -186,6 +208,21 @@ else:
                              char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
                              tag_to_id, pretrained = word_embeds)
         
+    elif (model_name == 'CNN_CNN_LSTM_MC'):
+        print ('CNN_CNN_LSTM_MC')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_out1_channels = parameters['w1chl']
+        word_out2_channels = parameters['w2chl']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+        decoder_hidden_units = parameters['dchid']
+
+        model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out1_channels, word_out2_channels,
+                             char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
+                             tag_to_id, pretrained = word_embeds)
+        
     acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0, acq_mode = parameters['acqmd'])
     
 model.cuda()
@@ -204,9 +241,10 @@ while tokens_acquired < avail_budget:
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)
         
-    losses, all_F = trainer.train_single(opt.num_epochs, active_train_data, dev_data, test_train_data, test_data,
+    losses, all_F = trainer.train_model(opt.num_epochs, active_train_data, dev_data, test_train_data, test_data,
                                         learning_rate = learning_rate, checkpoint_folder = checkpoint_folder,
-                                        plot_every = len(acquisition_function.train_index)/10,eval_test_train=False)
+                                        batch_size = parameters['batch_size'], eval_test_train=False,
+                                        plot_every = len(acquisition_function.train_index)/10)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     

@@ -11,13 +11,13 @@ from neural_ner.modules import CharEncoderCNN
 from neural_ner.modules import WordEncoderRNN
 from neural_ner.modules import DecoderCRF
 
-class CNN_BiLSTM_CRF(nn.Module):
+class CNN_BiLSTM_CRF_MC(nn.Module):
     
     def __init__(self, word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
                  char_embedding_dim, char_out_channels, tag_to_id, cap_input_dim=4 ,
                  cap_embedding_dim=0, pretrained=None):
         
-        super(CNN_BiLSTM_CRF, self).__init__()
+        super(CNN_BiLSTM_CRF_MC, self).__init__()
         
         self.word_vocab_size = word_vocab_size
         self.word_embedding_dim = word_embedding_dim

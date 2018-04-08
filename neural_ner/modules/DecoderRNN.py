@@ -23,37 +23,73 @@ class DecoderRNN(nn.Module):
         
         self.rnn = nn.LSTM(input_size + tag_size, hidden_size, n_layers, bidirectional=False)
         self.linear = nn.Linear(hidden_size, tag_size)
-        self.lossfunc = nn.CrossEntropyLoss()
+        self.ignore = -1
+        self.lossfunc = nn.CrossEntropyLoss(ignore_index= self.ignore)
         
-    def forward_step(self, input_var, prev_tag, hidden, usecuda=True):
+    def forward_step(self, input_var, prev_tag, hidden ,usecuda=True):
         
         prev_tag_onehot = torch.eye(self.tagset_size)
-        prev_tag_onehot = prev_tag_onehot.index_select(0,torch.LongTensor([prev_tag]))
+        prev_tag_onehot = prev_tag_onehot.index_select(0,torch.LongTensor(prev_tag))
+        
         if usecuda:
             prev_tag_onehot = Variable(prev_tag_onehot).cuda()
         else:
             prev_tag_onehot = Variable(prev_tag_onehot)
         
-        decoder_input = torch.cat([input_var, prev_tag_onehot],1).unsqueeze(1)
+        decoder_input = torch.cat([input_var, prev_tag_onehot],1).unsqueeze(0)
         output, hidden = self.rnn(decoder_input, hidden)
-        output = self.linear(output.view(-1, self.hidden_size))
-        output_tag = output.max(1)[1].data[0]
-    
+        output = self.linear(output.squeeze(0))
+        output_tag = output.max(1)[1].data.cpu().numpy().tolist()
+
         return output, output_tag, hidden
         
-    def forward(self, input_var, tags, usecuda=True):
+    def forward(self, input_var, tags, mask, usecuda=True):
+        
+        batch_size, sequence_len, _ = input_var.size()
         
         input_var = self.dropout(input_var)
-        max_length = input_var.size(0)
+        
+        input_var = input_var.transpose(0, 1).contiguous()
+        
+        tags = tags.transpose(0, 1).contiguous()
+        mask = mask.float().transpose(0, 1).contiguous()
+        
+        maskedtags = tags.clone()
+        maskedtags[mask==0] = -1
+        
         loss = 0.0
-        tag_seq = []
-        prev_tag = self.tag_to_ix[START_TAG]
+        prev_tag = [self.tag_to_ix[START_TAG]]*batch_size
         hidden = None
-        for i in range(max_length):
-            output, prev_tag, hidden=self.forward_step(input_var[i].unsqueeze(0), prev_tag, hidden, 
+        
+        for i in range(sequence_len):
+            output, prev_tag, hidden=self.forward_step(input_var[i], prev_tag, hidden, 
+                                                       usecuda=usecuda)
+            loss += self.lossfunc(output, maskedtags[i])
+        return loss
+    
+    def decode(self, input_var, wordslen, usecuda=True):
+        
+        batch_size, sequence_len, _ = input_var.size()
+        
+        input_var = self.dropout(input_var)
+        input_var = input_var.transpose(0, 1).contiguous()
+        
+        loss = 0.0
+        prev_tag = [self.tag_to_ix[START_TAG]]*batch_size
+        hidden = None
+        
+        tag_seq = []
+        probs= []
+        for i in range(sequence_len):
+            output, prev_tag, hidden=self.forward_step(input_var[i], prev_tag, hidden, 
                                                        usecuda=usecuda)
             tag_seq.append(prev_tag)
-            loss += self.lossfunc(output, tags[i])
-        loss/=max_length
+            pb = nn.functional.softmax(output, dim = 1).data.cpu().numpy()
+            probs.append(pb)
         
-        return loss, tag_seq
+        probs = np.array(probs).transpose(1,0,2)
+        
+        tag_seq = np.array(tag_seq).transpose().tolist()
+        tag_seq = [ts[:wordslen[i]] for i,ts in enumerate(tag_seq)]
+        
+        return probs, tag_seq

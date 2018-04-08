@@ -20,95 +20,158 @@ class DecoderCRF(nn.Module):
         self.transitions.data[tag_to_ix[START_TAG], :] = -10000
         self.transitions.data[:, tag_to_ix[STOP_TAG]] = -10000
     
-    def viterbi_decode(self, features, usecuda = True):
+    def viterbi_decode(self, feats, mask ,usecuda = True, score_only= False):
+    
+        batch_size, sequence_len, num_tags = feats.size()
+        
+        assert num_tags == self.tagset_size
+        
+        mask = mask.transpose(0, 1).contiguous()
+        feats = feats.transpose(0, 1).contiguous()
         
         backpointers = []
         
-        init_vars = torch.Tensor(1, self.tagset_size).fill_(-10000.)
-        init_vars[0][self.tag_to_ix[START_TAG]] = 0
+        all_forward_vars = Variable(torch.Tensor(sequence_len, 
+                                    batch_size, num_tags).fill_(0.)).cuda()
+        
+        init_vars = torch.Tensor(batch_size, num_tags).fill_(-10000.)
+        init_vars[:,self.tag_to_ix[START_TAG]] = 0.
         if usecuda:
             forward_var = Variable(init_vars).cuda()
         else:
             forward_var = Variable(init_vars)
         
-        for feat in features:
-            next_tag_var = forward_var.view(1, -1).expand(self.tagset_size, 
-                                      self.tagset_size) + self.transitions
-            _, bptrs_t = torch.max(next_tag_var, dim=1)
+        for i in range(sequence_len):
+            broadcast_forward = forward_var.view(batch_size, 1, num_tags)
+            transition_scores = self.transitions.view(1, num_tags, num_tags)
             
-            bptrs_t = bptrs_t.squeeze().data.cpu().numpy()
-            next_tag_var = next_tag_var.data.cpu().numpy()
+            next_tag_var = broadcast_forward + transition_scores
             
-            viterbivars_t = next_tag_var[range(len(bptrs_t)), bptrs_t]
-            if usecuda:
-                viterbivars_t = Variable(torch.FloatTensor(viterbivars_t)).cuda()
-            else:
-                viterbivars_t = Variable(torch.FloatTensor(viterbivars_t))
+            viterbivars_t, bptrs_t = torch.max(next_tag_var, dim=2)
             
-            forward_var = viterbivars_t + feat
-            backpointers.append(bptrs_t)
+            forward_var = viterbivars_t + feats[i]
+            all_forward_vars[i,:,:] = forward_var
 
-        terminal_var = forward_var + self.transitions[self.tag_to_ix[STOP_TAG]]
-        terminal_var.data[self.tag_to_ix[STOP_TAG]] = -10000.
-        terminal_var.data[self.tag_to_ix[START_TAG]] = -10000.
+            bptrs_t = bptrs_t.squeeze().data.cpu().numpy()
+            backpointers.append(bptrs_t)
         
-        best_tag_id = argmax(terminal_var.unsqueeze(0))
-        path_score = terminal_var[best_tag_id]
-        best_path = [best_tag_id]
-        for bptrs_t in reversed(backpointers):
-            best_tag_id = bptrs_t[best_tag_id]
-            best_path.append(best_tag_id)
-        start = best_path.pop()
+        mask_sum = torch.sum(mask, dim = 0, keepdim =True) - 1
+        mask_sum_ex = mask_sum.view(1, batch_size, 1).expand(1, batch_size, num_tags)
+        final_forward_var = all_forward_vars.gather(0, mask_sum_ex).squeeze(0)
         
-        assert start == self.tag_to_ix[START_TAG]
-        best_path.reverse()
+        terminal_var = final_forward_var + self.transitions[self.tag_to_ix[STOP_TAG]].view(1, num_tags)
+        terminal_var.data[:,self.tag_to_ix[STOP_TAG]] = -10000.
+        terminal_var.data[:,self.tag_to_ix[START_TAG]] = -10000.
         
-        return path_score, best_path
+        path_score, best_tag_id = torch.max(terminal_var, dim = 1)
+                
+        if score_only:
+            return path_score
+        
+        n_mask_sum = mask_sum.squeeze().data.cpu().numpy() + 1
+        best_tag_id = best_tag_id.data.cpu().numpy()
+        decoded_tags = []
+        for i in range(batch_size):
+            best_path = [best_tag_id[i]]
+            bp_list = reversed([itm[i] for itm in backpointers[:n_mask_sum[i]]])
+            for bptrs_t in bp_list:
+                best_tag_id[i] = bptrs_t[best_tag_id[i]]
+                best_path.append(best_tag_id[i])
+            start = best_path.pop()
+            assert start == self.tag_to_ix[START_TAG]
+            best_path.reverse()
+            decoded_tags.append(best_path)
+        
+        return path_score, decoded_tags
     
-    def crf_forward(self, feats, usecuda=True):
+    def crf_forward(self, feats, mask, usecuda=True):
         
-        init_alphas = torch.Tensor(1, self.tagset_size).fill_(-10000.)
-        init_alphas[0][self.tag_to_ix[START_TAG]] = 0.
-        forward_var = Variable(init_alphas).cuda()
+        batch_size, sequence_length, num_tags = feats.size()
         
-        for feat in feats:
-            emit_score = feat.view(-1, 1)
-            tag_var = forward_var + self.transitions + emit_score
-            max_tag_var, _ = torch.max(tag_var, dim=1)
-            tag_var = tag_var - max_tag_var.view(-1, 1)
-            forward_var = max_tag_var + torch.log(torch.sum(torch.exp(tag_var), dim=1)).view(1, -1)
+        mask = mask.float().transpose(0, 1).contiguous()
+        feats = feats.transpose(0, 1).contiguous()
+        
+        init_alphas = torch.Tensor(batch_size, num_tags).fill_(-10000.)
+        init_alphas[:,self.tag_to_ix[START_TAG]] = 0.
+        if usecuda:
+            forward_var = Variable(init_alphas).cuda()
+        else:
+            forward_var = Variable(init_alphas)
+        
+        for i in range(sequence_length):
+            emit_score = feats[i].view(batch_size, num_tags, 1)
+            transition_scores = self.transitions.view(1, num_tags, num_tags)
+            broadcast_forward = forward_var.view(batch_size, 1, num_tags)
+            tag_var = broadcast_forward + transition_scores + emit_score 
             
-        terminal_var = (forward_var + self.transitions[self.tag_to_ix[STOP_TAG]]).view(1, -1)
-        alpha = log_sum_exp(terminal_var)
+            forward_var = (log_sum_exp(tag_var, dim = 2) * mask[i].view(batch_size, 1) +
+                            forward_var * (1 - mask[i]).view(batch_size, 1))
+            
+        terminal_var = (forward_var + (self.transitions[self.tag_to_ix[STOP_TAG]]).view(1, -1))
+        alpha = log_sum_exp(terminal_var, dim = 1)
         
         return alpha
+        
     
-    def score_sentence(self, features, tags, usecuda=True):
-        if usecuda:
-            r = torch.LongTensor(range(features.size()[0])).cuda()
-            pad_start_tags = torch.cat([torch.cuda.LongTensor([self.tag_to_ix[START_TAG]]), tags])
-            pad_stop_tags = torch.cat([tags, torch.cuda.LongTensor([self.tag_to_ix[STOP_TAG]])])
-        else:
-            r = torch.LongTensor(range(features.size()[0]))
-            pad_start_tags = torch.cat([torch.LongTensor([self.tag_to_ix[START_TAG]]), tags])
-            pad_stop_tags = torch.cat([tags, torch.LongTensor([self.tag_to_ix[STOP_TAG]])])
+    def score_sentence(self, feats, tags, mask, usecuda=True):
+                
+        batch_size, sequence_length, num_tags = feats.size()
+        
+        feats = feats.transpose(0, 1).contiguous()
+        tags = tags.transpose(0, 1).contiguous()
+        mask = mask.float().transpose(0, 1).contiguous()
+                
+        broadcast_transitions = self.transitions.view(1, num_tags, num_tags).expand(batch_size, num_tags, num_tags)
+        
+        score = self.transitions[:,self.tag_to_ix[START_TAG]].index_select(0, tags[0])
+        
+        for i in range(sequence_length - 1):
+            current_tag, next_tag = tags[i], tags[i+1]
+            
+            transition_score = (
+                     broadcast_transitions
+                    .gather(1, next_tag.view(batch_size, 1, 1).expand(batch_size, 1, num_tags))
+                    .squeeze(1)
+                    .gather(1, current_tag.view(batch_size, 1))
+                    .squeeze(1)
+                    )
 
-        score = torch.sum(self.transitions[pad_stop_tags, pad_start_tags]) + torch.sum(features[r, tags])
+            emit_score = feats[i].gather(1, current_tag.view(batch_size, 1)).squeeze(1)
+
+            score = score + transition_score* mask[i + 1] + emit_score * mask[i]  
+        last_tag_index = mask.sum(0).long() - 1
+
+        last_tags = tags.gather(0, last_tag_index.view(1, batch_size).expand(sequence_length, batch_size))
+        last_tags = last_tags[0]
+
+        last_transition_score = self.transitions[self.tag_to_ix[STOP_TAG]].index_select(0, last_tags)
+        
+        last_inputs = feats[-1]                                     
+        last_input_score = last_inputs.gather(1, last_tags.view(batch_size, 1))
+        last_input_score = last_input_score.squeeze(1)
+        
+        score = score + last_transition_score + last_input_score * mask[-1]
+        
         return score
     
-    def decode(self, input_var, tags, input_lengths=None, usecuda=True):
+    def decode(self, input_var, mask, usecuda=True, score_only= False):
         
         input_var = self.dropout(input_var)
         features = self.hidden2tag(input_var)
-        score, tag_seq = self.viterbi_decode(features, usecuda=usecuda)
-        
+        if score_only:
+            score = self.viterbi_decode(features, mask, usecuda=usecuda, score_only=True)
+            return score
+        score, tag_seq = self.viterbi_decode(features, mask, usecuda=usecuda)
         return score, tag_seq
     
-    def forward(self, input_var, tags, input_lengths=None, usecuda=True):
+    def forward(self, input_var, tags, mask=None, usecuda=True):
+        
+        if mask is None:
+            mask = Variable(torch.ones(*tags.size()).long())
         
         input_var = self.dropout(input_var)
         features = self.hidden2tag(input_var)
-        forward_score = self.crf_forward(features, usecuda=usecuda)
-        ground_score = self.score_sentence(features, tags, usecuda=usecuda)
+        forward_score = self.crf_forward(features, mask, usecuda=usecuda)
+        ground_score = self.score_sentence(features, tags, mask, usecuda=usecuda)
         
-        return forward_score-ground_score
+        return torch.sum(forward_score-ground_score)

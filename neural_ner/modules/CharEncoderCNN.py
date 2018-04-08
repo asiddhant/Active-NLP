@@ -19,8 +19,8 @@ class CharEncoderCNN(nn.Module):
         
         embedded = self.embedding(input_var).unsqueeze(1)
         embedded = self.input_dropout(embedded)
-        
         output = self.cnn(embedded)
-        output = nn.functional.max_pool2d(output, kernel_size=(output.size(2), 1)).view(output.size(0),self.out_channels)
+        output = nn.functional.max_pool2d(output, kernel_size=(output.size(2), 1))
+        output = output.squeeze(3).squeeze(2)
         
         return output

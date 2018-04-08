@@ -20,22 +20,23 @@ class WordEncoderCNN(nn.Module):
         self.cnn2 = nn.Conv2d(out1_channels, out2_channels, kernel_size=(kernel_width, 1),
                              padding = (pad_width,0))
 
-    def forward(self, sentence, char_embedding, cap_embedding=None ,input_lengths=None):
+    def forward(self, words, char_embedding, cap_embedding=None ,input_lengths=None):
         
-        embedded = self.embedding(sentence)
+        embedded = self.embedding(words)
+        
         if cap_embedding:
-            embedded = torch.cat((embedded,char_embedding,cap_embedding),1)  
+            embedded = torch.cat((embedded,char_embedding,cap_embedding),2)  
         else:
-            embedded = torch.cat((embedded,char_embedding),1)
+            embedded = torch.cat((embedded,char_embedding),2)
         
-        embedded1 = embedded.unsqueeze(0).unsqueeze(0)
+        embedded1 = embedded.unsqueeze(1)
         embedded1 = self.input_dropout(embedded1)
-        
+                        
         output1 = self.cnn1(embedded1)
         output1 = nn.functional.max_pool2d(output1, kernel_size=(self.kernel_width, 1), stride = 1)
         
         output2 = self.cnn2(output1)
         output2 = nn.functional.max_pool2d(output2, kernel_size=(self.kernel_width, 1), stride = 1)
-        output2 = output2.squeeze(3).squeeze(0).t()
+        output2 = output2.squeeze(3).transpose(1,2)
         
         return output2, embedded
