@@ -35,8 +35,6 @@ parser.add_argument('--num_epochs', default=10, type=int, dest='num_epochs',
                     help="Reload the last saved model")
 parser.add_argument('--initdata', default=2, type=int, dest='initdata',
                     help="Percentage of Data to being with")
-parser.add_argument('--acquiredata', default=2, type=int, dest='acquiredata',
-                    help="Percentage of Data to Acquire from Rest of Training Set")
 parser.add_argument('--acquiremethod', default='random', type=str, dest='acquiremethod',
                     help="Percentage of Data to Acquire from Rest of Training Set")
 
@@ -127,7 +125,6 @@ model_name = opt.usemodel
 model_load = opt.reload
 checkpoint = opt.checkpoint
 init_percent = opt.initdata
-acquire_percent = opt.acquiredata
 acquire_method = opt.acquiremethod
 loader = Loader()
 
@@ -161,10 +158,12 @@ avail_budget = total_tokens
 
 if model_load:
     print ('Loading Saved Weights....................................................................')
-    model_path = os.path.join(result_path, model_name, checkpoint, 'modelweights')
+    model_path = os.path.join(result_path, model_name, 'active_checkpoint', acquire_method, 
+                              checkpoint, 'modelweights')
     model=torch.load(model_path)
     
-    acquisition_path = os.path.join(result_path, model_name, checkpoint, 'acquisition2.p')
+    acquisition_path = os.path.join(result_path, model_name, 'active_checkpoint', acquire_method,
+                                    checkpoint, 'acquisition2.p')
     acquisition_function = pkl.load(open(acquisition_path,'rb'))
     
 else:
@@ -223,7 +222,8 @@ else:
                              char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
                              tag_to_id, pretrained = word_embeds)
         
-    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0, acq_mode = parameters['acqmd'])
+    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0, 
+                                       acq_mode = parameters['acqmd'])
     
 model.cuda()
 learning_rate = 0.015
@@ -234,17 +234,20 @@ trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.data
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 tokens_acquired = sum([len(x['words']) for x in active_train_data])
 
-while tokens_acquired < avail_budget:
+acquisition_strat = [2]*24 + [5]
+
+for acquire_percent in acquisition_strat:
     
     checkpoint_folder = os.path.join('active_checkpoint',acquire_method, str(tokens_acquired).zfill(8))
     checkpoint_path = os.path.join(result_path, model_name, checkpoint_folder)
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)
         
+    acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
     losses, all_F = trainer.train_model(opt.num_epochs, active_train_data, dev_data, test_train_data, test_data,
                                         learning_rate = learning_rate, checkpoint_folder = checkpoint_folder,
                                         batch_size = parameters['batch_size'], eval_test_train=False,
-                                        plot_every = len(acquisition_function.train_index)/10)
+                                        plot_every = acq_plot_every)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     
