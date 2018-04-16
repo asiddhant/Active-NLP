@@ -13,16 +13,15 @@ from neural_ner.modules import DecoderRNN
 
 class CNN_CNN_LSTM_MC(nn.Module):
     
-    def __init__(self, word_vocab_size, word_embedding_dim, word_out1_channels, word_out2_channels,
-                 char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
-                 tag_to_id, cap_input_dim=4, cap_embedding_dim=0, pretrained=None):
+    def __init__(self, word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
+                 char_embedding_dim, char_out_channels, decoder_hidden_units, tag_to_id, cap_input_dim=4, 
+                 cap_embedding_dim=0, pretrained=None):
         
         super(CNN_CNN_LSTM_MC, self).__init__()
         
         self.word_vocab_size = word_vocab_size
         self.word_embedding_dim = word_embedding_dim
-        self.word_out1_channels = word_out1_channels
-        self.word_out2_channels = word_out2_channels
+        self.word_out_channels = word_out_channels
         
         self.char_vocab_size = char_vocab_size
         self.char_embedding_dim = char_embedding_dim
@@ -47,13 +46,13 @@ class CNN_CNN_LSTM_MC(nn.Module):
         self.initializer.init_embedding(self.char_encoder.embedding.weight)
         
         self.word_encoder = WordEncoderCNN(word_vocab_size, word_embedding_dim, char_out_channels,
-                                           kernel_width = 3, pad_width = 2, input_dropout_p=0.5,
-                                           out1_channels=word_out1_channels, out2_channels=word_out2_channels)
+                                           kernel_width = 3, pad_width = 1, input_dropout_p=0.5,
+                                           out_channels=word_out_channels)
         
         if pretrained is not None:
             self.word_encoder.embedding.weight = nn.Parameter(torch.FloatTensor(pretrained))
         
-        augmented_decoder_inp_size = (word_out2_channels + word_embedding_dim + 
+        augmented_decoder_inp_size = (word_out_channels + word_embedding_dim + 
                                       char_out_channels + cap_embedding_dim)
         self.decoder = DecoderRNN(augmented_decoder_inp_size, decoder_hidden_units, self.tagset_size, 
                                   self.tag_to_ix, input_dropout_p=0.5)

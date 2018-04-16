@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-from neural_ner.util.utils import *
+from neural_srl.util.utils import *
 
 class DecoderCRF(nn.Module):
 
@@ -63,7 +63,7 @@ class DecoderCRF(nn.Module):
             all_forward_vars[i,:,:] = forward_var
             sum_all_forward_vars[i,:,:] = sum_forward_var
 
-            bptrs_t = bptrs_t.data.cpu().numpy()
+            bptrs_t = bptrs_t.squeeze().data.cpu().numpy()
             backpointers.append(bptrs_t)
         
         mask_sum = torch.sum(mask, dim = 0, keepdim =True) - 1

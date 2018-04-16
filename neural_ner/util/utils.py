@@ -369,10 +369,10 @@ def create_batches(dataset, batch_size, order='keep', str_words=False, tag_padde
         chars_seqs = [itm['chars'] for itm in batch_data]
         str_words_seqs = [itm['str_words'] for itm in batch_data]
 
-        seq_pairs = sorted(zip(words_seqs, caps_seqs, target_seqs, chars_seqs, str_words_seqs), 
-                           key=lambda p: len(p[0]), reverse=True)
+        seq_pairs = sorted(zip(words_seqs, caps_seqs, target_seqs, chars_seqs, str_words_seqs, 
+                               range(len(words_seqs))), key=lambda p: len(p[0]), reverse=True)
 
-        words_seqs, caps_seqs, target_seqs, chars_seqs, str_words_seqs = zip(*seq_pairs)
+        words_seqs, caps_seqs, target_seqs, chars_seqs, str_words_seqs, sort_info = zip(*seq_pairs)
         words_lengths = np.array([len(s) for s in words_seqs])
 
         words_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in words_seqs])
@@ -393,11 +393,11 @@ def create_batches(dataset, batch_size, order='keep', str_words=False, tag_padde
         if str_words:
             outputdict = {'words':words_padded, 'caps':caps_padded, 'tags': target_padded, 
                           'chars': chars_padded, 'wordslen': words_lengths, 'charslen': chars_lengths,
-                          'tagsmask':words_mask, 'str_words': str_words_seqs}
+                          'tagsmask':words_mask, 'str_words': str_words_seqs, 'sort_info': sort_info}
         else:
             outputdict = {'words':words_padded, 'caps':caps_padded, 'tags': target_padded, 
                           'chars': chars_padded, 'wordslen': words_lengths, 'charslen': chars_lengths,
-                          'tagsmask':words_mask}
+                          'tagsmask':words_mask, 'sort_info': sort_info}
 
         batches.append(outputdict)
 

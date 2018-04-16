@@ -1,14 +1,14 @@
 from __future__ import print_function
 from torch.autograd import Variable
 import time
-from evaluator import Evaluator
+from .evaluator import Evaluator
 import sys
 import os
 import numpy as np
 np.random.seed(0)
 import torch
 import torch.nn as nn
-from utils import *
+from .utils import *
 
 
 class Trainer(object):
@@ -21,16 +21,16 @@ class Trainer(object):
         self.model_name = os.path.join(result_path, model_name)
         self.usecuda = usecuda
         
-        if usedataset=='conll':
-            self.evaluator = Evaluator(result_path, model_name, mappings).evaluate_conll
+        if usedataset=='consrl':
+            self.evaluator = Evaluator(result_path, model_name, mappings).evaluate_consrl
     
     def adjust_learning_rate(self, optimizer, lr):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
             
-    def train_model(self, num_epochs, train_data, dev_data, test_train_data, test_data, learning_rate,
-                    checkpoint_folder='.', eval_test_train=True, plot_every=50, adjust_lr=True,
-                    batch_size = 16):
+    def train_model(self, num_epochs, train_data, dev_data, test_data, test_train_data, learning_rate, 
+                    checkpoint_folder='.', eval_test_train=True, plot_every=100, adjust_lr=True, 
+                    batch_size = 80):
 
         losses = []
         loss = 0.0
@@ -54,28 +54,26 @@ class Trainer(object):
 
                 words = data['words']
                 tags = data['tags']
-                chars = data['chars']
+                verbs = data['verbs']
                 caps = data['caps']
                 mask = data['tagsmask']
                 
                 if self.usecuda:
                     words = Variable(torch.LongTensor(words)).cuda()
-                    chars = Variable(torch.LongTensor(chars)).cuda()
+                    verbs = Variable(torch.LongTensor(verbs)).cuda()
                     caps = Variable(torch.LongTensor(caps)).cuda()
                     mask = Variable(torch.LongTensor(mask)).cuda()
                     tags = Variable(torch.LongTensor(tags)).cuda()
                 else:
                     words = Variable(torch.LongTensor(words))
-                    chars = Variable(torch.LongTensor(chars))
+                    verbs = Variable(torch.LongTensor(verbs))
                     caps = Variable(torch.LongTensor(caps))
                     mask = Variable(torch.LongTensor(mask))
                     tags = Variable(torch.LongTensor(tags))
                 
                 wordslen = data['wordslen']
-                charslen = data['charslen']
                 
-                score = self.model(words, tags, chars, caps, wordslen, charslen, mask,
-                                         usecuda=self.usecuda)
+                score = self.model(words, tags, verbs, caps, wordslen, mask, usecuda=self.usecuda)
                 
                 loss += score.data[0]/np.sum(data['wordslen'])
                 score.backward()
@@ -93,9 +91,12 @@ class Trainer(object):
                         losses.append(loss)
                     losses.append(loss)
                     loss = 0.0
+                sys.stdout.flush()
+
                                         
             if adjust_lr:
-                self.adjust_learning_rate(self.optimizer, lr=learning_rate/(1+0.05*float(word_count)/len(train_data)))
+                self.adjust_learning_rate(self.optimizer, 
+                                          lr=learning_rate/(1+0.05*word_count/len(train_data)))
             
             if epoch%self.eval_every==0:
                 
@@ -110,12 +111,12 @@ class Trainer(object):
                                                              checkpoint_folder=checkpoint_folder)
                 if save:
                     torch.save(self.model, os.path.join(self.model_name, checkpoint_folder, 'modelweights'))
+                
                 best_test_F, new_test_F, _ = self.evaluator(self.model, test_data, best_test_F,
                                                             checkpoint_folder=checkpoint_folder)
+                    
                 sys.stdout.flush()
-
                 all_F.append([new_train_F, new_dev_F, new_test_F])
-                
                 self.model.train(True)
 
             print('*'*80)

@@ -86,14 +86,13 @@ elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['chdim'] = 25
     parameters['tgsch'] = 'iobes'
     
-    parameters['w1chl'] = 800
-    parameters['w2chl'] = 800
+    parameters['wdchl'] = 200
     parameters['cldim'] = 25
     parameters['cnchl'] = 50
-    parameters['dchid'] = 20
+    parameters['dchid'] = 50
     
     parameters['lrate'] = 0.01
-    parameters['batch_size'] = 32
+    parameters['batch_size'] = 16
     parameters['acqmd'] = 'd'
     
 elif opt.usemodel == 'CNN_CNN_LSTM_MC':
@@ -104,14 +103,13 @@ elif opt.usemodel == 'CNN_CNN_LSTM_MC':
     parameters['chdim'] = 25
     parameters['tgsch'] = 'iobes'
     
-    parameters['w1chl'] = 400
-    parameters['w2chl'] = 400
+    parameters['wdchl'] = 200
     parameters['cldim'] = 25
     parameters['cnchl'] = 50
     parameters['dchid'] = 50
     
     parameters['lrate'] = 0.01
-    parameters['batch_size'] = 32
+    parameters['batch_size'] = 16
     parameters['acqmd'] = 'm'
     
 else:
@@ -192,37 +190,60 @@ else:
         model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
                                char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
 
+    print('Building Model............................................................................')
+    if (model_name == 'CNN_BiLSTM_CRF'):
+        print ('CNN_BiLSTM_CRF')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_hidden_dim = parameters['wldim']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+
+        model = CNN_BiLSTM_CRF(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                               char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_BiLSTM_CRF_MC'):
+        print ('CNN_BiLSTM_CRF_MC')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_hidden_dim = parameters['wldim']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+
+        model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                               char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+
     elif (model_name == 'CNN_CNN_LSTM'):
         print ('CNN_CNN_LSTM')
         word_vocab_size = len(word_to_id)
         word_embedding_dim = parameters['wrdim']
-        word_out1_channels = parameters['w1chl']
-        word_out2_channels = parameters['w2chl']
+        word_out_channels = parameters['wdchl']
         char_vocab_size = len(char_to_id)
         char_embedding_dim = parameters['chdim']
         char_out_channels = parameters['cnchl']
         decoder_hidden_units = parameters['dchid']
 
-        model = CNN_CNN_LSTM(word_vocab_size, word_embedding_dim, word_out1_channels, word_out2_channels,
-                             char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
+        model = CNN_CNN_LSTM(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
+                             char_embedding_dim, char_out_channels, decoder_hidden_units,
                              tag_to_id, pretrained = word_embeds)
         
     elif (model_name == 'CNN_CNN_LSTM_MC'):
         print ('CNN_CNN_LSTM_MC')
         word_vocab_size = len(word_to_id)
         word_embedding_dim = parameters['wrdim']
-        word_out1_channels = parameters['w1chl']
-        word_out2_channels = parameters['w2chl']
+        word_out_channels = parameters['wdchl']
         char_vocab_size = len(char_to_id)
         char_embedding_dim = parameters['chdim']
         char_out_channels = parameters['cnchl']
         decoder_hidden_units = parameters['dchid']
 
-        model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out1_channels, word_out2_channels,
-                             char_vocab_size, char_embedding_dim, char_out_channels, decoder_hidden_units,
-                             tag_to_id, pretrained = word_embeds)
+        model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
+                                char_embedding_dim, char_out_channels, decoder_hidden_units,
+                                tag_to_id, pretrained = word_embeds)
         
-    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0, 
+    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=9, 
                                        acq_mode = parameters['acqmd'])
     
 model.cuda()
@@ -234,7 +255,9 @@ trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.data
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 tokens_acquired = sum([len(x['words']) for x in active_train_data])
 
-acquisition_strat = [2]*24 + [5]
+num_acquisitions_required = 25
+acquisition_strat_all = [2]*24 + [5]*10 + [0]
+acquisition_strat = acquisition_strat_all[:num_acquisitions_required]
 
 for acquire_percent in acquisition_strat:
     
@@ -246,8 +269,8 @@ for acquire_percent in acquisition_strat:
     acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
     losses, all_F = trainer.train_model(opt.num_epochs, active_train_data, dev_data, test_train_data, test_data,
                                         learning_rate = learning_rate, checkpoint_folder = checkpoint_folder,
-                                        batch_size = parameters['batch_size'], eval_test_train=False,
-                                        plot_every = acq_plot_every)
+                                        batch_size = parameters['batch_size'] if tokens_acquired > (0.2*total_tokens) else 1,
+                                        eval_test_train=False, plot_every = acq_plot_every)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     

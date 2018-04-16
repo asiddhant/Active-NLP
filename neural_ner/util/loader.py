@@ -8,6 +8,7 @@ from torch.autograd import Variable
 from utils import *
 import codecs
 import cPickle
+import itertools
 
 class Loader(object):
     
