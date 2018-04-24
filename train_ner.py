@@ -9,6 +9,7 @@ from neural_ner.models import CNN_CNN_LSTM
 from neural_ner.models import CNN_CNN_LSTM_MC
 import matplotlib.pyplot as plt
 import torch
+import random
 
 import argparse
 
@@ -122,6 +123,11 @@ if not os.path.exists(os.path.join(result_path,model_name)):
 
 if opt.dataset == 'conll':
     train_data, dev_data, test_data, test_train_data, mappings = loader.load_conll(dataset_path, parameters)
+elif opt.dataset == 'ontonotes':
+    train_data, dev_data, test_data, mappings = loader.load_ontonotes(dataset_path, parameters)
+    test_train_data = train_data[-10000:]
+else:
+    raise NotImplementedError()
 
 word_to_id = mappings['word_to_id']
 tag_to_id = mappings['tag_to_id']

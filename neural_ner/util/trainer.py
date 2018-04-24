@@ -21,8 +21,7 @@ class Trainer(object):
         self.model_name = os.path.join(result_path, model_name)
         self.usecuda = usecuda
         
-        if usedataset=='conll':
-            self.evaluator = Evaluator(result_path, model_name, mappings).evaluate_conll
+        self.evaluator = Evaluator(result_path, model_name, mappings).evaluate_conll
     
     def adjust_learning_rate(self, optimizer, lr):
         for param_group in optimizer.param_groups:
