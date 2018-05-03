@@ -11,13 +11,13 @@ from neural_srl.modules import VanillaRNN
 from neural_srl.modules import DecoderCRF
 
 
-class BiLSTM_CRF(nn.Module):
+class BiLSTM_CRF_MC(nn.Module):
     
     def __init__(self, word_vocab_size, word_embedding_dim, word_hidden_dim, tag_to_id, 
                  verb_embedding_dim, cap_embedding_dim, verb_input_dim = 2, cap_input_dim=4, 
                  pretrained=None):
         
-        super(BiLSTM_CRF, self).__init__()
+        super(BiLSTM_CRF_MC, self).__init__()
         
         self.word_vocab_size = word_vocab_size
         self.word_embedding_dim = word_embedding_dim

@@ -137,7 +137,7 @@ class Loader(object):
         print("%i / %i / %i sentences in train / dev / test." % (
               len(train_data), len(dev_data), len(test_data)))
         
-        mapping_file = os.path.join(dataset,'mapping.pkl')
+        mapping_file = os.path.join(dataset,'mapping_'+ str(tag_scheme) +'.pkl')
         
         if not os.path.isfile(mapping_file):
             all_word_embeds = {}

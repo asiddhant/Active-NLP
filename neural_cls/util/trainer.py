@@ -14,13 +14,14 @@ from utils import *
 
 class Trainer(object):
     
-    def __init__(self, model, optimizer, result_path, model_name, usedataset, 
+    def __init__(self, model, optimizer, result_path, model_name, tag_to_id, usedataset,
                  eval_every=1, usecuda = True):
         self.model = model
         self.optimizer = optimizer
         self.eval_every = eval_every
         self.model_name = os.path.join(result_path, model_name)
         self.usecuda = usecuda
+        self.tagset_size = len(tag_to_id)
         
         self.evaluator = Evaluator(result_path, model_name).evaluate
     
@@ -44,6 +45,7 @@ class Trainer(object):
             t=time.time()
             
             train_batches = create_batches(train_data, batch_size= batch_size, order='random')
+            n_batches = len(train_batches)
             
             for i, index in enumerate(np.random.permutation(len(train_batches))): 
                 
@@ -62,7 +64,7 @@ class Trainer(object):
                 
                 wordslen = data['wordslen']
                 
-                score = self.model(words, tags, wordslen, usecuda=self.usecuda)
+                score = self.model(words, tags, self.tagset_size, wordslen, n_batches, usecuda=self.usecuda)
                 
                 loss += score.data[0]/len(wordslen)
                 score.backward()

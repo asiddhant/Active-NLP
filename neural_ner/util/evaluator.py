@@ -63,7 +63,7 @@ class Evaluator(object):
         scoref = os.path.join(self.result_path, self.model_name, checkpoint_folder ,'score.txt')
 
         with open(predf, 'wb') as f:
-            f.write('\n'.join(prediction))
+            f.write('\n'.join(prediction).encode('utf-8'))
 
         os.system('%s < %s > %s' % (eval_script, predf, scoref))
 

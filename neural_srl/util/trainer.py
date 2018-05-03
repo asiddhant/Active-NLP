@@ -21,16 +21,15 @@ class Trainer(object):
         self.model_name = os.path.join(result_path, model_name)
         self.usecuda = usecuda
         
-        if usedataset=='consrl':
-            self.evaluator = Evaluator(result_path, model_name, mappings).evaluate_consrl
+        self.evaluator = Evaluator(result_path, model_name, mappings).evaluate_consrl
     
     def adjust_learning_rate(self, optimizer, lr):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
             
     def train_model(self, num_epochs, train_data, dev_data, test_data, test_train_data, learning_rate, 
-                    checkpoint_folder='.', eval_test_train=True, plot_every=100, adjust_lr=True, 
-                    batch_size = 80):
+                    checkpoint_folder='.', eval_test_train=True, plot_every=100, adjust_lr=False, 
+                    batch_size = 60):
 
         losses = []
         loss = 0.0
@@ -78,7 +77,7 @@ class Trainer(object):
                 loss += score.data[0]/np.sum(data['wordslen'])
                 score.backward()
                 
-                nn.utils.clip_grad_norm(self.model.parameters(), 5.0)
+                nn.utils.clip_grad_norm(self.model.parameters(), 1.0)
                 self.optimizer.step()
                 
                 count += 1

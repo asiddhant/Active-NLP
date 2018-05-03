@@ -133,7 +133,7 @@ def prepare_dataset(sentences, word_to_id, tag_to_id):
                  for w in str_words]
         caps = [cap_feature(w) for w in str_words]
         tags = [tag_to_id[t] for t in s[2]]
-        verbs = [v for v in s[1]]
+        verbs = [int(v) for v in s[1]]
         data.append({
             'str_words': str_words,
             'words': words,
@@ -155,6 +155,7 @@ def log_sum_exp(vec, dim=-1, keepdim = False):
 def create_batches(dataset, batch_size, order='keep', str_words=False, tag_padded= True):
 
     newdata = copy.deepcopy(dataset)
+    
     if order=='sort':
         newdata.sort(key = lambda x:len(x['words']))
     elif order=='random':
@@ -173,10 +174,10 @@ def create_batches(dataset, batch_size, order='keep', str_words=False, tag_padde
         target_seqs = [itm['tags'] for itm in batch_data]
         str_words_seqs = [itm['str_words'] for itm in batch_data]
 
-        seq_pairs = sorted(zip(words_seqs, caps_seqs, target_seqs, verbs_seqs, str_words_seqs), 
-                           key=lambda p: len(p[0]), reverse=True)
+        seq_pairs = sorted(zip(words_seqs, caps_seqs, target_seqs, verbs_seqs, str_words_seqs,
+                            range(len(words_seqs))), key=lambda p: len(p[0]), reverse=True)
 
-        words_seqs, caps_seqs, target_seqs, verbs_seqs, str_words_seqs = zip(*seq_pairs)
+        words_seqs, caps_seqs, target_seqs, verbs_seqs, str_words_seqs, sort_info = zip(*seq_pairs)
         words_lengths = np.array([len(s) for s in words_seqs])
 
         words_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in words_seqs])
@@ -193,10 +194,11 @@ def create_batches(dataset, batch_size, order='keep', str_words=False, tag_padde
         if str_words:
             outputdict = {'words':words_padded, 'caps':caps_padded, 'tags': target_padded, 
                           'verbs': verbs_padded, 'wordslen': words_lengths, 'tagsmask':words_mask, 
-                          'str_words': str_words_seqs}
+                          'str_words': str_words_seqs, 'sort_info': sort_info}
         else:
             outputdict = {'words':words_padded, 'caps':caps_padded, 'tags': target_padded, 
-                          'verbs': verbs_padded, 'wordslen': words_lengths, 'tagsmask':words_mask}
+                          'verbs': verbs_padded, 'wordslen': words_lengths, 'tagsmask':words_mask,
+                          'sort_info': sort_info}
 
         batches.append(outputdict)
 

@@ -13,7 +13,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--dataset', action='store', dest='dataset', default='consrl', type=str,
+parser.add_argument('--dataset', action='store', dest='dataset', default='conll12srl', type=str,
                     help='Dataset to be Used')
 parser.add_argument('--result_path', action='store', dest='result_path', default='neural_srl/results/',
                     type=str, help='Path to Save/Load Result')
@@ -27,7 +27,7 @@ parser.add_argument('--reload', default=0, type=int, dest='reload',
                     help="Reload the last saved model")
 parser.add_argument('--checkpoint', default=".", type=str, dest='checkpoint',
                     help="Location of trained Model")
-parser.add_argument('--num_epochs', default=10, type=int, dest='num_epochs',
+parser.add_argument('--num_epochs', default=20, type=int, dest='num_epochs',
                     help="Reload the last saved model")
 
 opt = parser.parse_args()
@@ -38,13 +38,40 @@ parameters['model'] = opt.usemodel
 parameters['wrdim'] = opt.worddim
 parameters['ptrnd'] = opt.pretrnd
 
-if opt.usemodel == 'BiLSTM_CRF':
+if opt.usemodel == 'BiLSTM_CRF' and opt.dataset == 'conll12srl':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 300
     parameters['vbdim'] = 100
     parameters['cpdim'] = 0
     
-    parameters['lrate'] = 0.015
+    parameters['lrate'] = 1.0
+    parameters['batch_size'] = 60
+
+elif opt.usemodel == 'BiLSTM_CRF' and opt.dataset == 'conll05srl':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 300
+    parameters['vbdim'] = 100
+    parameters['cpdim'] = 0
+    
+    parameters['lrate'] = 1.0
+    parameters['batch_size'] = 80
+
+elif opt.usemodel == 'BiLSTM_CRF_MC' and opt.dataset == 'conll12srl':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 300
+    parameters['vbdim'] = 100
+    parameters['cpdim'] = 0
+    
+    parameters['lrate'] = 1.0
+    parameters['batch_size'] = 60
+    
+elif opt.usemodel == 'BiLSTM_CRF_MC' and opt.dataset == 'conll05srl':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 300
+    parameters['vbdim'] = 100
+    parameters['cpdim'] = 0
+    
+    parameters['lrate'] = 1.0
     parameters['batch_size'] = 80
     
 else:
@@ -66,9 +93,12 @@ if not os.path.exists(result_path):
 if not os.path.exists(os.path.join(result_path,model_name)):
     os.makedirs(os.path.join(result_path,model_name))
 
-if opt.dataset == 'consrl':
-    train_data, dev_data, test_data, mappings = loader.load_consrl(dataset_path, parameters)
-    test_train_data = random.sample(train_data, 50000)
+if opt.dataset == 'conll12srl':
+    train_data, dev_data, test_data, mappings = loader.load_conll12srl(dataset_path, parameters)
+    test_train_data = random.sample(train_data, 20000)
+elif opt.dataset == 'conll05srl':
+    train_data, dev_data, test_data, mappings = loader.load_conll05srl(dataset_path, parameters)
+    test_train_data = random.sample(train_data, 20000)
 else:
     raise NotImplementedError()
 
@@ -94,16 +124,27 @@ else:
 
         model = BiLSTM_CRF(word_vocab_size, word_embedding_dim, word_hidden_dim, tag_to_id, 
                            verb_embedding_dim, cap_embedding_dim, pretrained = word_embeds)
+        
+    elif (model_name == 'BiLSTM_CRF_MC'):
+        print ('BiLSTM_CRF_MC')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_hidden_dim = parameters['wldim']
+        verb_embedding_dim = parameters['vbdim']
+        cap_embedding_dim = parameters['cpdim']
+
+        model = BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, tag_to_id, 
+                           verb_embedding_dim, cap_embedding_dim, pretrained = word_embeds)
     
     
 model.cuda()
 learning_rate = parameters['lrate']
 print('Initial learning rate is: %s' %(learning_rate))
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
+optimizer = torch.optim.Adadelta(model.parameters(), lr=learning_rate, rho=0.95, eps=1e-6)
 
 trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings) 
 losses, all_F = trainer.train_model(opt.num_epochs, train_data, dev_data, test_data, test_train_data,
-                                     learning_rate = learning_rate, batch_size = parameters['batch_size'])
+                                    learning_rate = learning_rate, batch_size = parameters['batch_size'])
     
 plt.plot(losses)
 plt.savefig(os.path.join(result_path, model_name, 'lossplot.png'))

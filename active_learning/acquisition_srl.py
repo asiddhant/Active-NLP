@@ -5,10 +5,10 @@ import numpy as np
 from collections import Counter
 import time
 from scipy import stats
-from neural_ner.util.utils import *
+from neural_srl.util.utils import *
 import pandas as pd
 
-class Acquisition(object):
+class Acquisition_SRL(object):
     
     def __init__(self, train_data, acq_mode='d', init_percent=2, seed=0, usecuda = True):
         self.tokenlen = sum([len(x['words']) for x in train_data])
@@ -46,26 +46,25 @@ class Acquisition(object):
         for data in data_batches:
 
             words = data['words']
-            chars = data['chars']
+            verbs = data['verbs']
             caps = data['caps']
             mask = data['tagsmask']
 
             if self.usecuda:
                 words = Variable(torch.LongTensor(words)).cuda()
-                chars = Variable(torch.LongTensor(chars)).cuda()
+                verbs = Variable(torch.LongTensor(verbs)).cuda()
                 caps = Variable(torch.LongTensor(caps)).cuda()
                 mask = Variable(torch.LongTensor(mask)).cuda()
             else:
                 words = Variable(torch.LongTensor(words))
-                chars = Variable(torch.LongTensor(chars))
+                verbs = Variable(torch.LongTensor(verbs))
                 caps = Variable(torch.LongTensor(caps))
                 mask = Variable(torch.LongTensor(mask))
 
             wordslen = data['wordslen']
-            charslen = data['charslen']
             sort_info = data['sort_info']
-            
-            score = model.decode(words, chars, caps, wordslen, charslen, mask, usecuda = self.usecuda,
+                        
+            score = model.decode(words, verbs, caps, wordslen, mask, usecuda = self.usecuda,
                                  score_only = True)
             
             norm_scores = score/np.array(wordslen)
@@ -107,30 +106,29 @@ class Acquisition(object):
         for data in data_batches:
 
             words = data['words']
-            chars = data['chars']
+            verbs = data['verbs']
             caps = data['caps']
             mask = data['tagsmask']
 
             if self.usecuda:
                 words = Variable(torch.LongTensor(words)).cuda()
-                chars = Variable(torch.LongTensor(chars)).cuda()
+                verbs = Variable(torch.LongTensor(verbs)).cuda()
                 caps = Variable(torch.LongTensor(caps)).cuda()
                 mask = Variable(torch.LongTensor(mask)).cuda()
             else:
                 words = Variable(torch.LongTensor(words))
-                chars = Variable(torch.LongTensor(chars))
+                verbs = Variable(torch.LongTensor(verbs))
                 caps = Variable(torch.LongTensor(caps))
                 mask = Variable(torch.LongTensor(mask))
 
             wordslen = data['wordslen']
-            charslen = data['charslen']
             sort_info = data['sort_info']
             
             tag_seq_list = []
             probs_list = []
             for itr in range(nsamp):
-                score, tag_seq = model.decode(words, chars, caps, wordslen, charslen, mask, 
-                                              usecuda = self.usecuda, score_only = False)
+                score, tag_seq = model.decode(words, verbs, caps, wordslen, mask, usecuda = self.usecuda,
+                                             score_only = False)
                 tag_seq = [[str(tg) for tg in one_tag_seq] for one_tag_seq in tag_seq]
                 tag_seq = np.array(['_'.join(one_tag_seq) for one_tag_seq in tag_seq])
                 tag_seq_new = tag_seq[np.array(sort_info)]
@@ -177,7 +175,7 @@ class Acquisition(object):
         if method=='random':
             self.get_random(data, num_tokens)
         else:
-            decoder = model_name.split('_')[2]
+            decoder = None
             if self.acq_mode == 'd':
                 if method=='mnlp':
                     self.get_mnlp(data, model_path, decoder, num_tokens)

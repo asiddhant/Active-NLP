@@ -5,8 +5,10 @@ import neural_cls
 from neural_cls.util import Trainer, Loader
 from neural_cls.models import BiLSTM
 from neural_cls.models import CNN
+from neural_cls.models import CNN_BB
 import matplotlib.pyplot as plt
 import torch
+import numpy as np
 
 import argparse
 
@@ -71,6 +73,24 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
     parameters['batch_size'] = 50
     parameters['opsiz'] = 2
     
+elif opt.usemodel == 'CNN_BB' and opt.dataset == 'trec':
+    parameters['wlchl'] = 100
+    parameters['nepch'] = 10
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 6
+    parameters['sigmp'] = float(np.exp(-3))
+    
+elif opt.usemodel == 'CNN_BB' and opt.dataset == 'mareview':
+    parameters['wlchl'] = 100
+    parameters['nepch'] = 5
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 2
+    parameters['sigmp'] = float(np.exp(-3))
+    
 else:
     raise NotImplementedError()
 
@@ -130,6 +150,17 @@ else:
         
         model = CNN(word_vocab_size, word_embedding_dim, word_out_channels, 
                     output_size, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_BB'):
+        print ('CNN_BB')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_out_channels = parameters['wlchl']
+        output_size = parameters['opsiz']
+        sigma_prior = parameters['sigmp']
+        
+        model = CNN_BB(word_vocab_size, word_embedding_dim, word_out_channels, 
+                       output_size, sigma_prior=sigma_prior, pretrained = word_embeds)
     
     
 model.cuda()
@@ -138,7 +169,7 @@ num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset) 
+trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset) 
 losses, all_F = trainer.train_model(num_epochs, train_data, test_data, learning_rate,
                                     batch_size = parameters['batch_size'])
     

@@ -157,78 +157,73 @@ print('Load Complete')
 total_tokens = sum([len(x['words']) for x in train_data])
 avail_budget = total_tokens
 
+print('Building Model............................................................................')
+if (model_name == 'CNN_BiLSTM_CRF'):
+    print ('CNN_BiLSTM_CRF')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_hidden_dim = parameters['wldim']
+    char_vocab_size = len(char_to_id)
+    char_embedding_dim = parameters['chdim']
+    char_out_channels = parameters['cnchl']
+
+    model = CNN_BiLSTM_CRF(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                           char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+
+elif (model_name == 'CNN_BiLSTM_CRF_MC'):
+    print ('CNN_BiLSTM_CRF_MC')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_hidden_dim = parameters['wldim']
+    char_vocab_size = len(char_to_id)
+    char_embedding_dim = parameters['chdim']
+    char_out_channels = parameters['cnchl']
+
+    model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                           char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+
+elif (model_name == 'CNN_CNN_LSTM'):
+    print ('CNN_CNN_LSTM')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_out_channels = parameters['wdchl']
+    char_vocab_size = len(char_to_id)
+    char_embedding_dim = parameters['chdim']
+    char_out_channels = parameters['cnchl']
+    decoder_hidden_units = parameters['dchid']
+
+    model = CNN_CNN_LSTM(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
+                         char_embedding_dim, char_out_channels, decoder_hidden_units,
+                         tag_to_id, pretrained = word_embeds)
+
+elif (model_name == 'CNN_CNN_LSTM_MC'):
+    print ('CNN_CNN_LSTM_MC')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_out_channels = parameters['wdchl']
+    char_vocab_size = len(char_to_id)
+    char_embedding_dim = parameters['chdim']
+    char_out_channels = parameters['cnchl']
+    decoder_hidden_units = parameters['dchid']
+
+    model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
+                            char_embedding_dim, char_out_channels, decoder_hidden_units,
+                            tag_to_id, pretrained = word_embeds)
+
 if model_load:
-    print ('Loading Saved Weights....................................................................')
-    model_path = os.path.join(result_path, model_name, 'active_checkpoint', acquire_method, 
-                              checkpoint, 'modelweights')
-    model=torch.load(model_path)
-    
+    print ('Loading Saved Data points....................................................................')
     acquisition_path = os.path.join(result_path, model_name, 'active_checkpoint', acquire_method,
                                     checkpoint, 'acquisition2.p')
     acquisition_function = pkl.load(open(acquisition_path,'rb'))
     
-else:
-    print('Building Model............................................................................')
-    if (model_name == 'CNN_BiLSTM_CRF'):
-        print ('CNN_BiLSTM_CRF')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_hidden_dim = parameters['wldim']
-        char_vocab_size = len(char_to_id)
-        char_embedding_dim = parameters['chdim']
-        char_out_channels = parameters['cnchl']
-
-        model = CNN_BiLSTM_CRF(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
-                               char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
-        
-    elif (model_name == 'CNN_BiLSTM_CRF_MC'):
-        print ('CNN_BiLSTM_CRF_MC')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_hidden_dim = parameters['wldim']
-        char_vocab_size = len(char_to_id)
-        char_embedding_dim = parameters['chdim']
-        char_out_channels = parameters['cnchl']
-
-        model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
-                               char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
-
-    elif (model_name == 'CNN_CNN_LSTM'):
-        print ('CNN_CNN_LSTM')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_out_channels = parameters['wdchl']
-        char_vocab_size = len(char_to_id)
-        char_embedding_dim = parameters['chdim']
-        char_out_channels = parameters['cnchl']
-        decoder_hidden_units = parameters['dchid']
-
-        model = CNN_CNN_LSTM(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
-                             char_embedding_dim, char_out_channels, decoder_hidden_units,
-                             tag_to_id, pretrained = word_embeds)
-        
-    elif (model_name == 'CNN_CNN_LSTM_MC'):
-        print ('CNN_CNN_LSTM_MC')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_out_channels = parameters['wdchl']
-        char_vocab_size = len(char_to_id)
-        char_embedding_dim = parameters['chdim']
-        char_out_channels = parameters['cnchl']
-        decoder_hidden_units = parameters['dchid']
-
-        model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
-                                char_embedding_dim, char_out_channels, decoder_hidden_units,
-                                tag_to_id, pretrained = word_embeds)
-        
-    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=9, 
+else:       
+    acquisition_function = Acquisition(train_data, init_percent=init_percent, seed=0, 
                                            acq_mode = parameters['acqmd'])
     
 model.cuda()
-learning_rate = 0.015
+learning_rate = parameters['lrate']
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
-trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings)
 
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 tokens_acquired = sum([len(x['words']) for x in active_train_data])
@@ -245,10 +240,11 @@ for acquire_percent in acquisition_strat:
         os.makedirs(checkpoint_path)
         
     acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
+    trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings)
     losses, all_F = trainer.train_model(opt.num_epochs, active_train_data, dev_data, test_train_data, test_data,
                                         learning_rate = learning_rate, checkpoint_folder = checkpoint_folder,
-                                        batch_size = parameters['batch_size'] if tokens_acquired > (0.2*total_tokens) else 1,
-                                        eval_test_train=False, plot_every = acq_plot_every)
+                                        batch_size = min(parameters['batch_size'],len(acquisition_function.train_index)/100),
+                                        eval_test_train=False, plot_every = acq_plot_every, lr_decay = 0.05)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     

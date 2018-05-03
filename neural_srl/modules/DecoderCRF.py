@@ -6,7 +6,7 @@ from neural_srl.util.utils import *
 
 class DecoderCRF(nn.Module):
 
-    def __init__(self, input_dimension, tag_to_ix, input_dropout_p=0.5):
+    def __init__(self, input_dimension, tag_to_ix, input_dropout_p=0):
         
         super(DecoderCRF, self).__init__()
         

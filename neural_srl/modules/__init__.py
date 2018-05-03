@@ -1,2 +1,2 @@
-from .WordEncoderRNN import WordEncoderRNN
+from .VanillaRNN import VanillaRNN
 from .DecoderCRF import DecoderCRF

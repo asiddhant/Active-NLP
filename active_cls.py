@@ -57,7 +57,7 @@ if opt.usemodel == 'BiLSTM' and opt.dataset == 'trec':
 elif opt.usemodel == 'BiLSTM' and opt.dataset == 'mareview':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 200
-    parameters['nepch'] = 5
+    parameters['nepch'] = 10
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
@@ -77,7 +77,7 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'trec':
 elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 5
+    parameters['nepch'] = 10
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
@@ -97,7 +97,7 @@ elif opt.usemodel == 'BiLSTM_MC' and opt.dataset == 'trec':
 elif opt.usemodel == 'BiLSTM_MC' and opt.dataset == 'mareview':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 200
-    parameters['nepch'] = 5
+    parameters['nepch'] = 10
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
@@ -117,7 +117,7 @@ elif opt.usemodel == 'CNN_MC' and opt.dataset == 'trec':
 elif opt.usemodel == 'CNN_MC' and opt.dataset == 'mareview':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 5
+    parameters['nepch'] = 10
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
@@ -169,59 +169,56 @@ print('Load Complete')
 total_sentences = len(train_data)
 avail_budget = total_sentences
 
+print('Building Model............................................................................')
+if (model_name == 'BiLSTM'):
+    print ('BiLSTM')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_hidden_dim = parameters['wldim']
+    output_size = parameters['opsiz']
+
+    model = BiLSTM(word_vocab_size, word_embedding_dim, word_hidden_dim,
+                   output_size, pretrained = word_embeds)
+
+elif (model_name == 'CNN'):
+    print ('CNN')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_out_channels = parameters['wlchl']
+    output_size = parameters['opsiz']
+
+    model = CNN(word_vocab_size, word_embedding_dim, word_out_channels, 
+                output_size, pretrained = word_embeds)
+
+elif (model_name == 'BiLSTM_MC'):
+    print ('BiLSTM_MC')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_hidden_dim = parameters['wldim']
+    output_size = parameters['opsiz']
+
+    model = BiLSTM_MC(word_vocab_size, word_embedding_dim, word_hidden_dim,
+                   output_size, pretrained = word_embeds)
+
+elif (model_name == 'CNN_MC'):
+    print ('CNN_MC')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_out_channels = parameters['wlchl']
+    output_size = parameters['opsiz']
+
+    model = CNN_MC(word_vocab_size, word_embedding_dim, word_out_channels, 
+                output_size, pretrained = word_embeds)
+
 if model_load:
     print ('Loading Saved Weights....................................................................')
-    model_path = os.path.join(result_path, model_name, 'active_checkpoint', acquire_method, 
-                              checkpoint, 'modelweights')
-    model=torch.load(model_path)
-    
     acquisition_path = os.path.join(result_path, model_name, 'active_checkpoint', acquire_method,
                                     checkpoint, 'acquisition2.p')
     acquisition_function = pkl.load(open(acquisition_path,'rb'))
     
 else:
-    print('Building Model............................................................................')
-    if (model_name == 'BiLSTM'):
-        print ('BiLSTM')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_hidden_dim = parameters['wldim']
-        output_size = parameters['opsiz']
         
-        model = BiLSTM(word_vocab_size, word_embedding_dim, word_hidden_dim,
-                       output_size, pretrained = word_embeds)
-        
-    elif (model_name == 'CNN'):
-        print ('CNN')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_out_channels = parameters['wlchl']
-        output_size = parameters['opsiz']
-        
-        model = CNN(word_vocab_size, word_embedding_dim, word_out_channels, 
-                    output_size, pretrained = word_embeds)
-        
-    elif (model_name == 'BiLSTM_MC'):
-        print ('BiLSTM_MC')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_hidden_dim = parameters['wldim']
-        output_size = parameters['opsiz']
-        
-        model = BiLSTM_MC(word_vocab_size, word_embedding_dim, word_hidden_dim,
-                       output_size, pretrained = word_embeds)
-        
-    elif (model_name == 'CNN_MC'):
-        print ('CNN_MC')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_out_channels = parameters['wlchl']
-        output_size = parameters['opsiz']
-        
-        model = CNN_MC(word_vocab_size, word_embedding_dim, word_out_channels, 
-                    output_size, pretrained = word_embeds)
-        
-    acquisition_function = Acquisition_CLS(train_data, init_percent=init_percent, seed=9, 
+    acquisition_function = Acquisition_CLS(train_data, init_percent=init_percent, seed=0, 
                                            acq_mode = parameters['acqmd'])
     
 model.cuda()
@@ -229,8 +226,6 @@ learning_rate = parameters['lrate']
 num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset) 
 
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
@@ -247,6 +242,7 @@ for acquire_percent in acquisition_strat:
         os.makedirs(checkpoint_path)
         
     acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
+    trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset) 
     losses, all_F = trainer.train_model(num_epochs, active_train_data, test_data, learning_rate,
                                         batch_size = parameters['batch_size'], checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)

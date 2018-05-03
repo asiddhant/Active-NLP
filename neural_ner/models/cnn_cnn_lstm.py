@@ -46,8 +46,8 @@ class CNN_CNN_LSTM(nn.Module):
         self.initializer.init_embedding(self.char_encoder.embedding.weight)
         
         self.word_encoder = WordEncoderCNN(word_vocab_size, word_embedding_dim, char_out_channels,
-                                           kernel_width = 3, pad_width = 1, input_dropout_p=0.5,
-                                           out_channels=word_out_channels)
+                                           kernel_width = 5, pad_width = 2, input_dropout_p=0.5,
+                                           output_dropout_p=0.5, out_channels=word_out_channels)
         
         if pretrained is not None:
             self.word_encoder.embedding.weight = nn.Parameter(torch.FloatTensor(pretrained))

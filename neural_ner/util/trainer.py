@@ -29,7 +29,7 @@ class Trainer(object):
             
     def train_model(self, num_epochs, train_data, dev_data, test_train_data, test_data, learning_rate,
                     checkpoint_folder='.', eval_test_train=True, plot_every=50, adjust_lr=True,
-                    batch_size = 16):
+                    batch_size = 16, lr_decay = 0.05):
 
         losses = []
         loss = 0.0
@@ -94,7 +94,7 @@ class Trainer(object):
                     loss = 0.0
                                         
             if adjust_lr:
-                self.adjust_learning_rate(self.optimizer, lr=learning_rate/(1+0.05*float(word_count)/len(train_data)))
+                self.adjust_learning_rate(self.optimizer, lr=learning_rate/(1+lr_decay*float(word_count)/len(train_data)))
             
             if epoch%self.eval_every==0:
                 

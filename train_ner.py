@@ -29,7 +29,7 @@ parser.add_argument('--reload', default=0, type=int, dest='reload',
                     help="Reload the last saved model")
 parser.add_argument('--checkpoint', default=".", type=str, dest='checkpoint',
                     help="Location of trained Model")
-parser.add_argument('--num_epochs', default=10, type=int, dest='num_epochs',
+parser.add_argument('--num_epochs', default=20, type=int, dest='num_epochs',
                     help="Reload the last saved model")
 
 opt = parser.parse_args()
@@ -73,17 +73,17 @@ elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
 elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['lower'] = 1
     parameters['zeros'] = 0
-    parameters['cpdim'] = 0
+    parameters['cpdim'] = 25
     parameters['dpout'] = 0.5
     parameters['chdim'] = 25
     parameters['tgsch'] = 'iobes'
     
-    parameters['wdchl'] = 200
+    parameters['wdchl'] = 125
     parameters['cldim'] = 25
     parameters['cnchl'] = 50
     parameters['dchid'] = 50
     
-    parameters['lrate'] = 0.01
+    parameters['lrate'] = 0.0075
     parameters['batch_size'] = 16
     
 elif opt.usemodel == 'CNN_CNN_LSTM_MC':
@@ -92,15 +92,15 @@ elif opt.usemodel == 'CNN_CNN_LSTM_MC':
     parameters['cpdim'] = 0
     parameters['dpout'] = 0.5
     parameters['chdim'] = 25
-    parameters['tgsch'] = 'iobes'
+    parameters['tgsch'] = 'iob'
     
-    parameters['wdchl'] = 200
+    parameters['wdchl'] = 125
     parameters['cldim'] = 25
     parameters['cnchl'] = 50
     parameters['dchid'] = 50
     
     parameters['lrate'] = 0.01
-    parameters['batch_size'] = 16
+    parameters['batch_size'] = 10
     
 else:
     raise NotImplementedError()
@@ -202,7 +202,8 @@ optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, momentum=0.9)
 
 trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset, mappings= mappings) 
 losses, all_F = trainer.train_model(opt.num_epochs, train_data, dev_data, test_train_data, test_data,
-                                     learning_rate = learning_rate, batch_size = parameters['batch_size'])
+                                     learning_rate = learning_rate, batch_size = parameters['batch_size'],
+                                     lr_decay = 0.05)
     
 plt.plot(losses)
 plt.savefig(os.path.join(result_path, model_name, 'lossplot.png'))
