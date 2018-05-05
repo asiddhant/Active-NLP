@@ -132,6 +132,70 @@ class Acquisition_CLS(object):
         print ('MC Acquisition took %d seconds:' %(time.time()-tm))
         print ('*'*80)
         
+    def get_mnlp_bb(self, dataset, model_path, num_sentences, nsamp=100, batch_size = 50):
+        
+        model = torch.load(model_path)
+        model.train(True)
+        tm = time.time()
+        
+        probs = np.ones((len(dataset),nsamp))*float('Inf')
+        varsc = np.ones(len(dataset))*float('Inf')
+        
+        new_dataset = [datapoint for j,datapoint in enumerate(dataset) if j not in self.train_index]
+        new_datapoints = [j for j in range(len(dataset)) if j not in self.train_index]
+        
+        data_batches = create_batches(new_dataset, batch_size = batch_size)
+        
+        varsc_outer_list = []
+        probs_outer_list = []
+        
+        for data in data_batches:
+
+            words = data['words']
+            if self.usecuda:
+                words = Variable(torch.LongTensor(words)).cuda()
+            else:
+                words = Variable(torch.LongTensor(words))
+
+            wordslen = data['wordslen']
+            sort_info = data['sort_info']
+            
+            tag_seq_list = []
+            probs_list = []
+            for itr in range(nsamp):
+                score, tag_seq = model.predict(words, wordslen, usecuda = self.usecuda, 
+                                               scoreonly = False)
+                tag_seq_new = np.array(tag_seq)[np.array(sort_info)]
+                assert len(tag_seq_new) == len(words)
+                tag_seq_list.append(tag_seq_new)
+                probs_list.append(score[np.array(sort_info)])
+            
+            tag_seq_list = np.array(tag_seq_list)
+            probs_list = np.array(probs_list).transpose()
+            _, tag_seq_count = stats.mode(tag_seq_list)
+            tag_seq_count = tag_seq_count.squeeze(0)
+            assert len(tag_seq_count) == len(words)
+            varsc_outer_list.extend(list(tag_seq_count))
+            probs_outer_list.extend(list(probs_list))
+           
+        assert len(new_datapoints) == len(varsc_outer_list)
+        varsc[new_datapoints] = np.array(varsc_outer_list)
+        assert len(new_datapoints) == len(probs_outer_list)
+        probs[new_datapoints,:] = np.array(probs_outer_list)
+        probsmean = np.mean(probs, axis = 1)
+        test_indices = np.lexsort((varsc, probsmean))
+                
+        cur_indices = set()
+        i = 0
+        while len(cur_indices)<num_sentences:
+            cur_indices.add(test_indices[i])
+            i+=1
+        self.train_index.update(cur_indices)
+        
+        print ('*'*80)
+        print ('BB Acquisition took %d seconds:' %(time.time()-tm))
+        print ('*'*80)
+        
     def obtain_data(self, data, model_path=None, model_name=None, acquire=2, method='random', num_samples=100):
         
         num_sentences = (acquire*self.sentencelen)/100
@@ -150,6 +214,11 @@ class Acquisition_CLS(object):
             elif self.acq_mode == 'm':
                 if method=='mnlp':
                     self.get_mnlp_mc(data, model_path, num_sentences, nsamp = num_samples)
+                else:
+                    raise NotImplementedError()
+            elif self.acq_mode == 'b':
+                if method=='mnlp':
+                    self.get_mnlp_bb(data, model_path, num_sentences, nsamp = num_samples)
                 else:
                     raise NotImplementedError()
             else:

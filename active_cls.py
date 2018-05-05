@@ -7,6 +7,7 @@ from neural_cls.models import BiLSTM
 from neural_cls.models import CNN
 from neural_cls.models import BiLSTM_MC
 from neural_cls.models import CNN_MC
+from neural_cls.models import CNN_BB
 import matplotlib.pyplot as plt
 import torch
 from active_learning import Acquisition_CLS
@@ -44,7 +45,27 @@ parameters['model'] = opt.usemodel
 parameters['wrdim'] = opt.worddim
 parameters['ptrnd'] = opt.pretrnd
 
-if opt.usemodel == 'BiLSTM' and opt.dataset == 'trec':
+if opt.usemodel == 'CNN' and opt.dataset == 'trec':
+    parameters['dpout'] = 0.5
+    parameters['wlchl'] = 100
+    parameters['nepch'] = 10
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 6
+    parameters['acqmd'] = 'd'
+    
+elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
+    parameters['dpout'] = 0.5
+    parameters['wlchl'] = 100
+    parameters['nepch'] = 10
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 2
+    parameters['acqmd'] = 'd'
+
+elif opt.usemodel == 'BiLSTM' and opt.dataset == 'trec':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 200
     parameters['nepch'] = 10
@@ -64,7 +85,7 @@ elif opt.usemodel == 'BiLSTM' and opt.dataset == 'mareview':
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'd'
     
-elif opt.usemodel == 'CNN' and opt.dataset == 'trec':
+elif opt.usemodel == 'CNN_MC' and opt.dataset == 'trec':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
     parameters['nepch'] = 10
@@ -72,9 +93,9 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'trec':
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
     parameters['opsiz'] = 6
-    parameters['acqmd'] = 'd'
+    parameters['acqmd'] = 'm'
     
-elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
+elif opt.usemodel == 'CNN_MC' and opt.dataset == 'mareview':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
     parameters['nepch'] = 10
@@ -82,7 +103,7 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
     parameters['opsiz'] = 2
-    parameters['acqmd'] = 'd'
+    parameters['acqmd'] = 'm'
     
 elif opt.usemodel == 'BiLSTM_MC' and opt.dataset == 'trec':
     parameters['dpout'] = 0.5
@@ -104,25 +125,27 @@ elif opt.usemodel == 'BiLSTM_MC' and opt.dataset == 'mareview':
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'm'
     
-elif opt.usemodel == 'CNN_MC' and opt.dataset == 'trec':
-    parameters['dpout'] = 0.5
+elif opt.usemodel == 'CNN_BB' and opt.dataset == 'trec':
     parameters['wlchl'] = 100
-    parameters['nepch'] = 10
+    parameters['nepch'] = 50
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
     parameters['opsiz'] = 6
-    parameters['acqmd'] = 'm'
+    parameters['sigmp'] = float(np.exp(-3))
+
+    parameters['acqmd'] = 'b'
     
-elif opt.usemodel == 'CNN_MC' and opt.dataset == 'mareview':
-    parameters['dpout'] = 0.5
+elif opt.usemodel == 'CNN_BB' and opt.dataset == 'mareview':
     parameters['wlchl'] = 100
-    parameters['nepch'] = 10
+    parameters['nepch'] = 50
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
     parameters['opsiz'] = 2
-    parameters['acqmd'] = 'm'
+    parameters['sigmp'] = float(np.exp(-3))
+
+    parameters['acqmd'] = 'b'
     
 else:
     raise NotImplementedError()
@@ -209,6 +232,17 @@ elif (model_name == 'CNN_MC'):
 
     model = CNN_MC(word_vocab_size, word_embedding_dim, word_out_channels, 
                 output_size, pretrained = word_embeds)
+    
+elif (model_name == 'CNN_BB'):
+        print ('CNN_BB')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_out_channels = parameters['wlchl']
+        output_size = parameters['opsiz']
+        sigma_prior = parameters['sigmp']
+        
+        model = CNN_BB(word_vocab_size, word_embedding_dim, word_out_channels, 
+                       output_size, sigma_prior=sigma_prior, pretrained = word_embeds)
 
 if model_load:
     print ('Loading Saved Weights....................................................................')
@@ -242,7 +276,7 @@ for acquire_percent in acquisition_strat:
         os.makedirs(checkpoint_path)
         
     acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
-    trainer = Trainer(model, optimizer, result_path, model_name, usedataset=opt.dataset) 
+    trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset) 
     losses, all_F = trainer.train_model(num_epochs, active_train_data, test_data, learning_rate,
                                         batch_size = parameters['batch_size'], checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)
