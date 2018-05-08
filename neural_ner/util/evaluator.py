@@ -1,7 +1,7 @@
 import os
 import codecs
 import torch
-from utils import *
+from .utils import *
 import torch
 from torch.autograd import Variable
 

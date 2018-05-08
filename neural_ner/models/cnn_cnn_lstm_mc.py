@@ -88,8 +88,8 @@ class CNN_CNN_LSTM_MC(nn.Module):
         new_word_features = torch.cat((word_features,word_input_feats),2)
         
         if score_only:
-            score, _ = self.decoder.decode(new_word_features, wordslen, usecuda=usecuda)
+            score, _ = self.decoder.decode(new_word_features, tagsmask, wordslen, usecuda=usecuda)
             return score
         
-        score, tag_seq = self.decoder.decode(new_word_features, wordslen, usecuda=usecuda)
+        score, tag_seq = self.decoder.decode(new_word_features, tagsmask, wordslen, usecuda=usecuda)
         return score, tag_seq
