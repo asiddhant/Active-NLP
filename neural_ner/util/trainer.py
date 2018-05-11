@@ -45,6 +45,7 @@ class Trainer(object):
             t=time.time()
             
             train_batches = create_batches(train_data, batch_size= batch_size, order='random')
+            n_batches = len(train_batches)
             
             for i, index in enumerate(np.random.permutation(len(train_batches))): 
                 
@@ -73,7 +74,7 @@ class Trainer(object):
                 wordslen = data['wordslen']
                 charslen = data['charslen']
                 
-                score = self.model(words, tags, chars, caps, wordslen, charslen, mask,
+                score = self.model(words, tags, chars, caps, wordslen, charslen, mask, n_batches,
                                          usecuda=self.usecuda)
                 
                 loss += score.data[0]/np.sum(data['wordslen'])

@@ -6,6 +6,7 @@ from neural_cls.util import Trainer, Loader
 from neural_cls.models import BiLSTM
 from neural_cls.models import CNN
 from neural_cls.models import BiLSTM_MC
+from neural_cls.models import BiLSTM_BB
 from neural_cls.models import CNN_MC
 from neural_cls.models import CNN_BB
 import matplotlib.pyplot as plt
@@ -127,7 +128,7 @@ elif opt.usemodel == 'BiLSTM_MC' and opt.dataset == 'mareview':
     
 elif opt.usemodel == 'CNN_BB' and opt.dataset == 'trec':
     parameters['wlchl'] = 100
-    parameters['nepch'] = 50
+    parameters['nepch'] = 25
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
@@ -138,7 +139,31 @@ elif opt.usemodel == 'CNN_BB' and opt.dataset == 'trec':
     
 elif opt.usemodel == 'CNN_BB' and opt.dataset == 'mareview':
     parameters['wlchl'] = 100
-    parameters['nepch'] = 50
+    parameters['nepch'] = 25
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 2
+    parameters['sigmp'] = float(np.exp(-3))
+
+    parameters['acqmd'] = 'b'
+    
+elif opt.usemodel == 'BiLSTM_BB' and opt.dataset == 'trec':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 200
+    parameters['nepch'] = 25
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 6
+    parameters['sigmp'] = float(np.exp(-3))
+
+    parameters['acqmd'] = 'b'
+    
+elif opt.usemodel == 'BiLSTM_BB' and opt.dataset == 'mareview':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 200
+    parameters['nepch'] = 25
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
@@ -234,15 +259,26 @@ elif (model_name == 'CNN_MC'):
                 output_size, pretrained = word_embeds)
     
 elif (model_name == 'CNN_BB'):
-        print ('CNN_BB')
-        word_vocab_size = len(word_to_id)
-        word_embedding_dim = parameters['wrdim']
-        word_out_channels = parameters['wlchl']
-        output_size = parameters['opsiz']
-        sigma_prior = parameters['sigmp']
+    print ('CNN_BB')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_out_channels = parameters['wlchl']
+    output_size = parameters['opsiz']
+    sigma_prior = parameters['sigmp']
+
+    model = CNN_BB(word_vocab_size, word_embedding_dim, word_out_channels, 
+                   output_size, sigma_prior=sigma_prior, pretrained = word_embeds)
         
-        model = CNN_BB(word_vocab_size, word_embedding_dim, word_out_channels, 
-                       output_size, sigma_prior=sigma_prior, pretrained = word_embeds)
+elif (model_name == 'BiLSTM_BB'):
+    print ('BiLSTM_BB')
+    word_vocab_size = len(word_to_id)
+    word_embedding_dim = parameters['wrdim']
+    word_hidden_dim = parameters['wldim']
+    output_size = parameters['opsiz']
+    sigma_prior = parameters['sigmp']
+
+    model = BiLSTM_BB(word_vocab_size, word_embedding_dim, word_hidden_dim,
+                   output_size, sigma_prior=sigma_prior, pretrained = word_embeds)
 
 if model_load:
     print ('Loading Saved Weights....................................................................')
@@ -261,6 +297,8 @@ num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset) 
+
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
 
@@ -276,7 +314,6 @@ for acquire_percent in acquisition_strat:
         os.makedirs(checkpoint_path)
         
     acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
-    trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset) 
     losses, all_F = trainer.train_model(num_epochs, active_train_data, test_data, learning_rate,
                                         batch_size = parameters['batch_size'], checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)

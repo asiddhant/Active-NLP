@@ -8,16 +8,18 @@ import neural_ner
 from neural_ner.util import Initializer
 from neural_ner.util import Loader
 from neural_ner.modules import CharEncoderCNN
-from neural_ner.modules import WordEncoderCNN
+from neural_ner.modules import WordEncoderCNN_BB
 from neural_ner.modules import DecoderRNN
 
-class CNN_CNN_LSTM(nn.Module):
+from neural_ner.util.utils import *
+
+class CNN_CNN_LSTM_BB(nn.Module):
     
     def __init__(self, word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
-                 char_embedding_dim, char_out_channels, decoder_hidden_units, tag_to_id, cap_input_dim=4, 
-                 cap_embedding_dim=0, pretrained=None):
+                 char_embedding_dim, char_out_channels, decoder_hidden_units, tag_to_id, sigma_prior, 
+                 cap_input_dim=4, cap_embedding_dim=0, pretrained=None):
         
-        super(CNN_CNN_LSTM, self).__init__()
+        super(CNN_CNN_LSTM_BB, self).__init__()
         
         self.word_vocab_size = word_vocab_size
         self.word_embedding_dim = word_embedding_dim
@@ -29,6 +31,7 @@ class CNN_CNN_LSTM(nn.Module):
         
         self.cap_input_dim = cap_input_dim
         self.cap_embedding_dim = cap_embedding_dim
+        self.sigma_prior = sigma_prior
         
         self.tag_to_ix = tag_to_id
         self.tagset_size = len(tag_to_id)
@@ -45,9 +48,9 @@ class CNN_CNN_LSTM(nn.Module):
         
         self.initializer.init_embedding(self.char_encoder.embedding.weight)
         
-        self.word_encoder = WordEncoderCNN(word_vocab_size, word_embedding_dim, char_out_channels,
-                                           kernel_width = 5, pad_width = 2, input_dropout_p=0.5,
-                                           output_dropout_p=0.5, out_channels=word_out_channels)
+        self.word_encoder = WordEncoderCNN_BB(word_vocab_size, word_embedding_dim, char_out_channels, 
+                                              sigma_prior= sigma_prior, kernel_width = 3, pad_width = 1, 
+                                              input_dropout_p=0.5, out_channels=word_out_channels)
         
         if pretrained is not None:
             self.word_encoder.embedding.weight = nn.Parameter(torch.FloatTensor(pretrained))
@@ -57,7 +60,7 @@ class CNN_CNN_LSTM(nn.Module):
         self.decoder = DecoderRNN(augmented_decoder_inp_size, decoder_hidden_units, self.tagset_size, 
                                   self.tag_to_ix, input_dropout_p=0.5)
         
-    def forward(self, words, tags, chars, caps, wordslen, charslen, tagsmask, n_batches, usecuda=True):
+    def forward_pass(self, words, tags, chars, caps, wordslen, charslen, tagsmask, usecuda=True):
         
         batch_size, max_len = words.size()
         
@@ -70,6 +73,23 @@ class CNN_CNN_LSTM(nn.Module):
         
         new_word_features = torch.cat((word_features,word_input_feats),2)
         loss = self.decoder(new_word_features, tags, tagsmask, usecuda=usecuda)
+        
+        return loss
+    
+    def forward(self, words, tags, chars, caps, wordslen, charslen, tagsmask, n_batches, n_samples = 3, usecuda=True):
+        batch_size, max_len = words.size()
+        s_log_pw, s_log_qw, s_log_likelihood = 0., 0., 0.
+        
+        for _ in xrange(n_samples):
+            sample_log_likelihood = -1. * self.forward_pass(words, tags, chars, caps, wordslen, charslen, tagsmask, 
+                                                            usecuda = usecuda)
+            sample_log_pw, sample_log_qw = self.word_encoder.get_lpw_lqw()
+            s_log_pw += sample_log_pw
+            s_log_qw += sample_log_qw
+            s_log_likelihood += sample_log_likelihood
+        
+        log_pw, log_qw, log_llh = s_log_pw/n_samples, s_log_qw/n_samples, s_log_likelihood/n_samples
+        loss = bayes_loss_function(log_pw, log_qw, log_llh, n_batches, batch_size)
         
         return loss
     

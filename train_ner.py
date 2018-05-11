@@ -5,12 +5,15 @@ import neural_ner
 from neural_ner.util import Trainer, Loader
 from neural_ner.models import CNN_BiLSTM_CRF
 from neural_ner.models import CNN_BiLSTM_CRF_MC
+from neural_ner.models import CNN_BiLSTM_CRF_BB
 from neural_ner.models import CNN_CNN_LSTM
 from neural_ner.models import CNN_CNN_LSTM_MC
+from neural_ner.models import CNN_CNN_LSTM_BB
 import matplotlib.pyplot as plt
 import torch
 import random
 
+import numpy as np
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -69,6 +72,22 @@ elif opt.usemodel == 'CNN_BiLSTM_CRF_MC':
     
     parameters['lrate'] = 0.015
     parameters['batch_size'] = 16
+    
+elif opt.usemodel == 'CNN_BiLSTM_CRF_BB':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
+
+    parameters['wldim'] = 200
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 25
+    
+    parameters['lrate'] = 0.015
+    parameters['batch_size'] = 16
+    parameters['sigmp'] = float(np.exp(-3))
 
 elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['lower'] = 1
@@ -83,7 +102,7 @@ elif opt.usemodel == 'CNN_CNN_LSTM':
     parameters['cnchl'] = 50
     parameters['dchid'] = 50
     
-    parameters['lrate'] = 0.0075
+    parameters['lrate'] = 0.01
     parameters['batch_size'] = 16
     
 elif opt.usemodel == 'CNN_CNN_LSTM_MC':
@@ -92,7 +111,7 @@ elif opt.usemodel == 'CNN_CNN_LSTM_MC':
     parameters['cpdim'] = 0
     parameters['dpout'] = 0.5
     parameters['chdim'] = 25
-    parameters['tgsch'] = 'iob'
+    parameters['tgsch'] = 'iobes'
     
     parameters['wdchl'] = 125
     parameters['cldim'] = 25
@@ -101,6 +120,23 @@ elif opt.usemodel == 'CNN_CNN_LSTM_MC':
     
     parameters['lrate'] = 0.01
     parameters['batch_size'] = 10
+    
+elif opt.usemodel == 'CNN_CNN_LSTM_BB':
+    parameters['lower'] = 1
+    parameters['zeros'] = 0
+    parameters['cpdim'] = 0
+    parameters['dpout'] = 0.5
+    parameters['chdim'] = 25
+    parameters['tgsch'] = 'iobes'
+    
+    parameters['wdchl'] = 125
+    parameters['cldim'] = 25
+    parameters['cnchl'] = 50
+    parameters['dchid'] = 50
+    
+    parameters['lrate'] = 0.01
+    parameters['batch_size'] = 10
+    parameters['sigmp'] = float(np.exp(-3))
     
 else:
     raise NotImplementedError()
@@ -165,6 +201,20 @@ else:
 
         model = CNN_BiLSTM_CRF_MC(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
                                char_embedding_dim, char_out_channels, tag_to_id, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_BiLSTM_CRF_BB'):
+        print ('CNN_BiLSTM_CRF_BB')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_hidden_dim = parameters['wldim']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+        sigma_prior = parameters['sigmp']
+
+        model = CNN_BiLSTM_CRF_BB(word_vocab_size, word_embedding_dim, word_hidden_dim, char_vocab_size,
+                               char_embedding_dim, char_out_channels, tag_to_id, sigma_prior=sigma_prior,
+                                  pretrained = word_embeds)
 
     elif (model_name == 'CNN_CNN_LSTM'):
         print ('CNN_CNN_LSTM')
@@ -193,6 +243,21 @@ else:
         model = CNN_CNN_LSTM_MC(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
                                 char_embedding_dim, char_out_channels, decoder_hidden_units,
                                 tag_to_id, pretrained = word_embeds)
+        
+    elif (model_name == 'CNN_CNN_LSTM_BB'):
+        print ('CNN_CNN_LSTM_BB')
+        word_vocab_size = len(word_to_id)
+        word_embedding_dim = parameters['wrdim']
+        word_out_channels = parameters['wdchl']
+        char_vocab_size = len(char_to_id)
+        char_embedding_dim = parameters['chdim']
+        char_out_channels = parameters['cnchl']
+        decoder_hidden_units = parameters['dchid']
+        sigma_prior = parameters['sigmp']
+
+        model = CNN_CNN_LSTM_BB(word_vocab_size, word_embedding_dim, word_out_channels, char_vocab_size, 
+                                char_embedding_dim, char_out_channels, decoder_hidden_units,
+                                tag_to_id, sigma_prior = sigma_prior, pretrained = word_embeds)
     
     
 model.cuda()
