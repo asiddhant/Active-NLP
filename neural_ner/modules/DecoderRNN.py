@@ -21,13 +21,24 @@ class DecoderRNN(nn.Module):
         
         self.dropout = nn.Dropout(input_dropout_p)
         
+        self.rnn = nn.LSTM(input_size + tag_size, hidden_size, n_layers, bidirectional=False)
         self.linear = nn.Linear(input_size, tag_size)
         self.ignore = -1
         self.lossfunc = nn.CrossEntropyLoss(ignore_index= self.ignore, size_average=False)
         
     def forward_step(self, input_var, prev_tag, hidden ,usecuda=True):
         
-        output = self.linear(input_var)
+        prev_tag_onehot = torch.eye(self.tagset_size)
+        prev_tag_onehot = prev_tag_onehot.index_select(0,torch.LongTensor(prev_tag))
+        
+        if usecuda:
+            prev_tag_onehot = Variable(prev_tag_onehot).cuda()
+        else:
+            prev_tag_onehot = Variable(prev_tag_onehot)
+        
+        decoder_input = torch.cat([input_var, prev_tag_onehot],1).unsqueeze(0)
+        output, hidden = self.rnn(decoder_input, hidden)
+        output = self.linear(output.squeeze(0))
         output_tag = output.max(1)[1].data.cpu().numpy().tolist()
 
         return output, output_tag, hidden
