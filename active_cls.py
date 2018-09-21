@@ -69,10 +69,10 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
 elif opt.usemodel == 'CNN' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 5
+    parameters['nepch'] = 20
     
-    parameters['lrate'] = 0.001
-    parameters['batch_size'] = 50
+    parameters['lrate'] = 0.0001
+    parameters['batch_size'] = 16
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'd'
 
@@ -99,9 +99,9 @@ elif opt.usemodel == 'BiLSTM' and opt.dataset == 'mareview':
 elif opt.usemodel == 'BiLSTM' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 200
-    parameters['nepch'] = 5
+    parameters['nepch'] = 20
     
-    parameters['lrate'] = 0.001
+    parameters['lrate'] = 0.0001
     parameters['batch_size'] = 16
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'd'
@@ -228,7 +228,7 @@ elif opt.dataset == 'mareview':
                                                        parameters['wrdim'])
     valid_data = test_data.copy()
 elif opt.dataset == 'subj':
-    train_data, valid_data, test_data, mappings = loader.load_mareview(dataset_path, parameters['ptrnd'], 
+    train_data, valid_data, test_data, mappings = loader.load_subj(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
 else:
     raise NotImplementedError()
@@ -323,9 +323,6 @@ num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset,
-                  usecuda = use_cuda) 
-
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
 
@@ -341,8 +338,11 @@ for acquire_percent in acquisition_strat:
         os.makedirs(checkpoint_path)
         
     acq_plot_every = max(len(acquisition_function.train_index)/(5*parameters['batch_size']),1)
-    losses, all_F = trainer.train_model(num_epochs, active_train_data, test_data, learning_rate,
-                                        batch_size = parameters['batch_size'], checkpoint_folder = checkpoint_folder,
+    adj_batch_size = min(parameters['batch_size'], max(2,sentences_acquired/10))
+    trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset,
+                      usecuda = use_cuda) 
+    losses, all_F = trainer.train_model(num_epochs, active_train_data, valid_data, test_data, learning_rate,
+                                        batch_size = adj_batch_size, checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))

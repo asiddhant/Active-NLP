@@ -23,7 +23,7 @@ class Trainer(object):
         self.usecuda = usecuda
         self.tagset_size = len(tag_to_id)
         
-        self.evaluator = Evaluator(result_path, model_name).evaluate
+        self.evaluator = Evaluator(result_path, model_name, usecuda=usecuda).evaluate
     
     def adjust_learning_rate(self, optimizer, lr):
         for param_group in optimizer.param_groups:

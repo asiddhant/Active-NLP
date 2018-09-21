@@ -16,7 +16,7 @@ parser = argparse.ArgumentParser()
 
 parser.add_argument('--dataset', action='store', dest='dataset', default='subj', type=str,
                     help='Dataset to be Used')
-parser.add_argument('--result_path', action='store', dest='result_path', default='results/neural_cls',
+parser.add_argument('--result_path', action='store', dest='result_path', default='results/neural_cls/',
                     type=str, help='Path to Save/Load Result')
 parser.add_argument('--usemodel', default='CNN', type=str, dest='usemodel',
                     help='Model to Use')
@@ -58,9 +58,9 @@ elif opt.usemodel == 'BiLSTM' and opt.dataset == 'mareview':
 elif opt.usemodel == 'BiLSTM' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 200
-    parameters['nepch'] = 5
+    parameters['nepch'] = 20
     
-    parameters['lrate'] = 0.001
+    parameters['lrate'] = 0.0001
     parameters['batch_size'] = 16
     parameters['opsiz'] = 2
     
@@ -85,10 +85,10 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
 elif opt.usemodel == 'CNN' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 5
+    parameters['nepch'] = 20
     
-    parameters['lrate'] = 0.001
-    parameters['batch_size'] = 50
+    parameters['lrate'] = 0.0001
+    parameters['batch_size'] = 16
     parameters['opsiz'] = 2
     
 elif opt.usemodel == 'CNN_BB' and opt.dataset == 'trec':
