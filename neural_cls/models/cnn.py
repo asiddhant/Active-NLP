@@ -35,7 +35,7 @@ class CNN(nn.Module):
         
         self.lossfunc = nn.CrossEntropyLoss()
         
-    def forward(self, words, tags, wordslen, usecuda=True):
+    def forward(self, words, tags, tagset_size, wordslen, nsamples=1, usecuda=True):
         
         batch_size, max_len = words.size()
         word_features = self.word_encoder(words, wordslen)

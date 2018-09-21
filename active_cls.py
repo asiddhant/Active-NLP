@@ -19,9 +19,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--dataset', action='store', dest='dataset', default='mareview', type=str,
+parser.add_argument('--dataset', action='store', dest='dataset', default='subj', type=str,
                     help='Dataset to be Used')
-parser.add_argument('--result_path', action='store', dest='result_path', default='neural_cls/results/',
+parser.add_argument('--result_path', action='store', dest='result_path', default='results/neural_cls',
                     type=str, help='Path to Save/Load Result')
 parser.add_argument('--usemodel', default='CNN', type=str, dest='usemodel',
                     help='Model to Use')
@@ -66,6 +66,16 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'd'
 
+elif opt.usemodel == 'CNN' and opt.dataset == 'subj':
+    parameters['dpout'] = 0.5
+    parameters['wlchl'] = 100
+    parameters['nepch'] = 5
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 2
+    parameters['acqmd'] = 'd'
+
 elif opt.usemodel == 'BiLSTM' and opt.dataset == 'trec':
     parameters['dpout'] = 0.5
     parameters['wldim'] = 200
@@ -83,6 +93,16 @@ elif opt.usemodel == 'BiLSTM' and opt.dataset == 'mareview':
     
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
+    parameters['opsiz'] = 2
+    parameters['acqmd'] = 'd'
+
+elif opt.usemodel == 'BiLSTM' and opt.dataset == 'subj':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 200
+    parameters['nepch'] = 5
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 16
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'd'
     
@@ -202,8 +222,13 @@ if not os.path.exists(os.path.join(result_path, model_name, 'active_checkpoint',
 if opt.dataset == 'trec':
     train_data, test_data, mappings = loader.load_trec(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
+    valid_data = test_data.copy()
 elif opt.dataset == 'mareview':
     train_data, test_data, mappings = loader.load_mareview(dataset_path, parameters['ptrnd'], 
+                                                       parameters['wrdim'])
+    valid_data = test_data.copy()
+elif opt.dataset == 'subj':
+    train_data, valid_data, test_data, mappings = loader.load_mareview(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
 else:
     raise NotImplementedError()
@@ -291,13 +316,15 @@ else:
     acquisition_function = Acquisition_CLS(train_data, init_percent=init_percent, seed=0, 
                                            acq_mode = parameters['acqmd'])
     
-model.cuda()
+use_cuda = torch.cuda.is_available()
+if use_cuda: model.cuda()
 learning_rate = parameters['lrate']
 num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset) 
+trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset,
+                  usecuda = use_cuda) 
 
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
@@ -327,8 +354,8 @@ for acquire_percent in acquisition_strat:
     
     print ('*'*80)
     saved_epoch = np.argmax(np.array([item[1] for item in all_F]))
-    print ('Budget Exhausted: %d, Best F on Train %.3f, Best F on Test %.3f' %(sentences_acquired,
-                                                    all_F[saved_epoch][0], all_F[saved_epoch][1]))
+    print ('Budget Exhausted: %d, Best F on Train %.3f, Best F on Dev %.3f, Best F on Test %.3f' 
+            %(sentences_acquired, all_F[saved_epoch][0], all_F[saved_epoch][1], all_F[saved_epoch][2]))
     print ('*'*80)
     
     active_train_data = [train_data[i] for i in acquisition_function.train_index]

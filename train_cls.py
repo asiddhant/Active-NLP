@@ -14,9 +14,9 @@ import argparse
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('--dataset', action='store', dest='dataset', default='mareview', type=str,
+parser.add_argument('--dataset', action='store', dest='dataset', default='subj', type=str,
                     help='Dataset to be Used')
-parser.add_argument('--result_path', action='store', dest='result_path', default='neural_cls/results/',
+parser.add_argument('--result_path', action='store', dest='result_path', default='results/neural_cls',
                     type=str, help='Path to Save/Load Result')
 parser.add_argument('--usemodel', default='CNN', type=str, dest='usemodel',
                     help='Model to Use')
@@ -54,6 +54,15 @@ elif opt.usemodel == 'BiLSTM' and opt.dataset == 'mareview':
     parameters['lrate'] = 0.001
     parameters['batch_size'] = 50
     parameters['opsiz'] = 2
+
+elif opt.usemodel == 'BiLSTM' and opt.dataset == 'subj':
+    parameters['dpout'] = 0.5
+    parameters['wldim'] = 200
+    parameters['nepch'] = 5
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 16
+    parameters['opsiz'] = 2
     
 elif opt.usemodel == 'CNN' and opt.dataset == 'trec':
     parameters['dpout'] = 0.5
@@ -65,6 +74,15 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'trec':
     parameters['opsiz'] = 6
     
 elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
+    parameters['dpout'] = 0.5
+    parameters['wlchl'] = 100
+    parameters['nepch'] = 5
+    
+    parameters['lrate'] = 0.001
+    parameters['batch_size'] = 50
+    parameters['opsiz'] = 2
+
+elif opt.usemodel == 'CNN' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
     parameters['nepch'] = 5
@@ -113,8 +131,15 @@ if not os.path.exists(os.path.join(result_path,model_name)):
 if opt.dataset == 'trec':
     train_data, test_data, mappings = loader.load_trec(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
+    valid_data = test_data.copy()
+
 elif opt.dataset == 'mareview':
     train_data, test_data, mappings = loader.load_mareview(dataset_path, parameters['ptrnd'], 
+                                                       parameters['wrdim'])
+    valid_data = test_data.copy()
+
+elif opt.dataset == 'subj':
+    train_data, valid_data, test_data, mappings = loader.load_subj(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
 else:
     raise NotImplementedError()
@@ -162,15 +187,16 @@ else:
         model = CNN_BB(word_vocab_size, word_embedding_dim, word_out_channels, 
                        output_size, sigma_prior=sigma_prior, pretrained = word_embeds)
     
-    
-model.cuda()
+use_cuda = torch.cuda.is_available()
+if use_cuda: model.cuda()
 learning_rate = parameters['lrate']
 num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset) 
-losses, all_F = trainer.train_model(num_epochs, train_data, test_data, learning_rate,
+trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedataset=opt.dataset,
+                 usecuda = use_cuda) 
+losses, all_F = trainer.train_model(num_epochs, train_data, valid_data, test_data, learning_rate,
                                     batch_size = parameters['batch_size'])
     
 plt.plot(losses)

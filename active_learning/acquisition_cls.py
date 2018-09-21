@@ -59,6 +59,7 @@ class Acquisition_CLS(object):
         probs[new_datapoints] = np.array(probscores)
         
         test_indices = np.argsort(probs)
+        print(probs[test_indices])
         cur_indices = set()
         i = 0
         while len(cur_indices)<num_sentences:

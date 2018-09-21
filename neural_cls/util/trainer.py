@@ -29,14 +29,16 @@ class Trainer(object):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
             
-    def train_model(self, num_epochs, train_data, test_data, learning_rate, checkpoint_folder='.', 
-                    eval_train=True, plot_every=20, adjust_lr=False, batch_size = 50):
+    def train_model(self, num_epochs, train_data, valid_data, test_data, learning_rate, 
+                    checkpoint_folder='.', eval_train=True, plot_every=20, adjust_lr=False, 
+                    batch_size = 16):
 
         losses = []
         loss = 0.0
         best_test_F = -1.0
+        best_dev_F = -1.0
         best_train_F = -1.0
-        all_F=[[0,0]]
+        all_F=[[0,0,0]]
         count = 0
         batch_count = 0
         
@@ -66,10 +68,10 @@ class Trainer(object):
                 
                 score = self.model(words, tags, self.tagset_size, wordslen, n_batches, usecuda=self.usecuda)
                 
-                loss += score.data[0]/len(wordslen)
+                loss += score.item()/len(wordslen)
                 score.backward()
                 
-                nn.utils.clip_grad_norm(self.model.parameters(), 5.0)
+                nn.utils.clip_grad_norm_(self.model.parameters(), 5.0)
                 self.optimizer.step()
                 
                 count += 1
@@ -94,7 +96,11 @@ class Trainer(object):
                                                                   checkpoint_folder=checkpoint_folder)
                 else:
                     best_train_F, new_train_F, _ = 0, 0, 0
-                best_test_F, new_test_F, save = self.evaluator(self.model, test_data, best_test_F,
+                
+                best_dev_F, new_dev_F, save = self.evaluator(self.model, valid_data, best_dev_F,
+                                                             checkpoint_folder=checkpoint_folder)
+
+                best_test_F, new_test_F, _ = self.evaluator(self.model, test_data, best_test_F,
                                                              checkpoint_folder=checkpoint_folder)
                 if save:
                     print ('*'*80)
@@ -103,7 +109,7 @@ class Trainer(object):
                     torch.save(self.model, os.path.join(self.model_name, checkpoint_folder, 'modelweights'))
                     
                 sys.stdout.flush()
-                all_F.append([new_train_F, new_test_F])
+                all_F.append([new_train_F, new_dev_F, new_test_F])
                 self.model.train(True)
 
             print('*'*80)
