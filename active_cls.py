@@ -9,7 +9,7 @@ from neural_cls.models import BiLSTM_MC
 from neural_cls.models import BiLSTM_BB
 from neural_cls.models import CNN_MC
 from neural_cls.models import CNN_BB
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import torch
 from active_learning import Acquisition_CLS
 import cPickle as pkl
@@ -361,6 +361,6 @@ for acquire_percent in acquisition_strat:
     active_train_data = [train_data[i] for i in acquisition_function.train_index]
     sentences_acquired = len(acquisition_function.train_index)
     
-    plt.clf()
-    plt.plot(losses)
-    plt.savefig(os.path.join(checkpoint_path,'lossplot.png'))
+    #plt.clf()
+    #plt.plot(losses)
+    #plt.savefig(os.path.join(checkpoint_path,'lossplot.png'))

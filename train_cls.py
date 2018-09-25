@@ -6,7 +6,7 @@ from neural_cls.util import Trainer, Loader
 from neural_cls.models import BiLSTM
 from neural_cls.models import CNN
 from neural_cls.models import CNN_BB
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import torch
 import numpy as np
 
@@ -199,5 +199,5 @@ trainer = Trainer(model, optimizer, result_path, model_name, tag_to_id, usedatas
 losses, all_F = trainer.train_model(num_epochs, train_data, valid_data, test_data, learning_rate,
                                     batch_size = parameters['batch_size'])
     
-plt.plot(losses)
-plt.savefig(os.path.join(result_path, model_name, 'lossplot.png'))
+#plt.plot(losses)
+#plt.savefig(os.path.join(result_path, model_name, 'lossplot.png'))
