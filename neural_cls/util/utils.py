@@ -138,6 +138,27 @@ def create_batches(dataset, batch_size, order='keep'):
 
     return batches
 
+def create_lms_batches(dataset, batch_size, eos_token):
+
+    newdata = copy.deepcopy(dataset)
+    newdata = np.array(newdata)  
+    batches = []
+    num_batches = np.ceil(len(dataset)/float(batch_size)).astype('int')
+
+    for i in range(num_batches):
+        batch_data = newdata[(i*batch_size):min(len(dataset),(i+1)*batch_size)]
+        words_seqs = [itm['words'] for itm in batch_data]
+        target_seqs = [itm['words'][1:]+[eos_token] for itm in batch_data]        
+        words_lengths = np.array([len(s) for s in words_seqs])
+        words_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in words_seqs])
+        targets_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in target_seqs])
+        words_mask = (words_padded!=0).astype('int')
+        outputdict = {'words':words_padded, 'wordslen': words_lengths, 'targetmask':words_mask, 
+                      'targets': targets_padded}
+        batches.append(outputdict)
+
+    return batches
+
 def log_gaussian(x, mu, sigma):
     return float(-0.5 * np.log(2 * np.pi) - np.log(np.abs(sigma))) - (x - mu)**2 / (2 * sigma**2)
 

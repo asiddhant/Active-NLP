@@ -69,7 +69,7 @@ class Acquisition_CLS(object):
         
         print ('D Acquisition took %d seconds:' %(time.time()-tm))
         
-    def get_mnlp_mc(self, dataset, model_path, num_sentences, nsamp=100, batch_size = 50):
+    def get_mnlp_mc(self, dataset, model_path, num_sentences, nsamp=100, batch_size = 32):
         
         model = torch.load(model_path)
         model.train(True)
@@ -133,7 +133,7 @@ class Acquisition_CLS(object):
         print ('MC Acquisition took %d seconds:' %(time.time()-tm))
         print ('*'*80)
         
-    def get_mnlp_bb(self, dataset, model_path, num_sentences, nsamp=100, batch_size = 50):
+    def get_mnlp_bb(self, dataset, model_path, num_sentences, nsamp=100, batch_size = 32):
         
         model = torch.load(model_path)
         model.train(True)
@@ -196,8 +196,55 @@ class Acquisition_CLS(object):
         print ('*'*80)
         print ('BB Acquisition took %d seconds:' %(time.time()-tm))
         print ('*'*80)
+
+    def get_lmpplx(self, dataset, model_path, num_sentences, lm_api, batch_size = 32, norm_len = True):
+
+        model = torch.load(model_path)
+        model.train(False)
+        tm = time.time()
+        pplxs = np.ones(len(dataset))*float('-inf')
         
-    def obtain_data(self, data, model_path=None, model_name=None, acquire=2, method='random', num_samples=100):
+        new_dataset = [datapoint for j,datapoint in enumerate(dataset) if j not in self.train_index]
+        new_datapoints = [j for j in range(len(dataset)) if j not in self.train_index]
+        
+        data_batches = create_lms_batches(new_dataset, batch_size = batch_size, eos_token = lm_api.eos_token)
+        pplxscores = []
+        
+        for data in data_batches:
+            words = data['words']
+            targets = data['targets']
+            if self.usecuda:
+                words = Variable(torch.LongTensor(words)).cuda()
+                targets = torch.LongTensor(targets).cuda()
+            else:
+                words = Variable(torch.LongTensor(words))
+                targets = torch.LongTensor(targets)
+
+            wordslen = data['wordslen']
+
+            score = model.predict(words, targets, ntokens=lm_api.ntokens, 
+                                  usecuda = self.usecuda)
+            if norm_len:
+                score = score/np.array(wordslen)
+            pplxscores.extend(list(score))
+            
+        assert len(new_datapoints) == len(pplxscores)
+        pplxs[new_datapoints] = np.array(pplxscores)
+        
+        test_indices = np.argsort(pplxs)[::-1]
+        print(pplxs[test_indices])
+        cur_indices = set()
+        i = 0
+        while len(cur_indices)<num_sentences:
+            cur_indices.add(test_indices[i])
+            i+=1
+        self.train_index.update(cur_indices)
+        
+        print ('D Acquisition took %d seconds:' %(time.time()-tm))
+
+        
+    def obtain_data(self, data, model_path=None, model_name=None, acquire=2, method='random', num_samples=100,
+                    lm_api = None):
         
         num_sentences = (acquire*self.sentencelen)/100
         
@@ -210,6 +257,9 @@ class Acquisition_CLS(object):
             if self.acq_mode == 'd':
                 if method=='mnlp':
                     self.get_mnlp(data, model_path, num_sentences)
+                elif method == 'lm_parallel':
+                    assert lm_api is not None
+                    self.get_lmpplx(data, model_path, num_sentences, lm_api)
                 else:
                     raise NotImplementedError()
             elif self.acq_mode == 'm':

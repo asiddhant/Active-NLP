@@ -9,6 +9,7 @@ from neural_cls.models import BiLSTM_MC
 from neural_cls.models import BiLSTM_BB
 from neural_cls.models import CNN_MC
 from neural_cls.models import CNN_BB
+from word_language_model.lmapi import lmAPI
 #import matplotlib.pyplot as plt
 import torch
 from active_learning import Acquisition_CLS
@@ -33,7 +34,7 @@ parser.add_argument('--reload', default=0, type=int, dest='reload',
                     help="Reload the last saved model")
 parser.add_argument('--checkpoint', default=".", type=str, dest='checkpoint',
                     help="Location of trained Model")
-parser.add_argument('--initdata', default=2, type=int, dest='initdata',
+parser.add_argument('--initdata', default=1, type=int, dest='initdata',
                     help="Percentage of Data to being with")
 parser.add_argument('--acquiremethod', default='random', type=str, dest='acquiremethod',
                     help="Percentage of Data to Acquire from Rest of Training Set")
@@ -69,7 +70,7 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
 elif opt.usemodel == 'CNN' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 20
+    parameters['nepch'] = 1 ##
     
     parameters['lrate'] = 0.0001
     parameters['batch_size'] = 16
@@ -237,6 +238,8 @@ word_to_id = mappings['word_to_id']
 tag_to_id = mappings['tag_to_id']
 word_embeds = mappings['word_embeds']
 
+use_cuda = torch.cuda.is_available()
+
 print('Load Complete')
 
 total_sentences = len(train_data)
@@ -314,20 +317,22 @@ if model_load:
 else:
         
     acquisition_function = Acquisition_CLS(train_data, init_percent=init_percent, seed=0, 
-                                           acq_mode = parameters['acqmd'])
+                                           acq_mode = parameters['acqmd'], usecuda = use_cuda)
     
-use_cuda = torch.cuda.is_available()
 if use_cuda: model.cuda()
 learning_rate = parameters['lrate']
 num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+if acquire_method == 'lm_parallel':
+    lmapi = lmAPI(mappings)
+
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
 
-num_acquisitions_required = 25
-acquisition_strat_all = [2]*24 + [5]*10 + [0]
+num_acquisitions_required = 50
+acquisition_strat_all = [1]*49 + [0]
 acquisition_strat = acquisition_strat_all[:num_acquisitions_required]
 
 for acquire_percent in acquisition_strat:
@@ -344,11 +349,15 @@ for acquire_percent in acquisition_strat:
     losses, all_F = trainer.train_model(num_epochs, active_train_data, valid_data, test_data, learning_rate,
                                         batch_size = adj_batch_size, checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)
+
+    lmapi.train_lm(active_train_data, checkpoint_folder = os.path.join(checkpoint_path,'lmweights'))
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     
-    acquisition_function.obtain_data(model_path = os.path.join(checkpoint_path ,'modelweights'), model_name = model_name,
-                                     data = train_data, acquire = acquire_percent, method=acquire_method)
+    saved_file_name = 'modelweights' if acquire_method != 'lm_parallel' else 'lmweights'
+    acquisition_function.obtain_data(model_path = os.path.join(checkpoint_path ,saved_file_name),
+                                     model_name = model_name, data = train_data, acquire = acquire_percent, 
+                                     method =acquire_method, lm_api = lmapi)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition2.p'),'wb'))
     
