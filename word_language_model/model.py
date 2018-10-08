@@ -58,7 +58,7 @@ class RNNModel(nn.Module):
         else:
             return weight.new_zeros(self.nlayers, bsz, self.nhid)
         
-    def get_pplx(self, inputs, targets, ntokens):
+    def predict(self, inputs, targets, ntokens, usecuda = True):
         inputs = inputs.t().contiguous()
         targets = targets.t().contiguous()
 

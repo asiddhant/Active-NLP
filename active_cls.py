@@ -70,7 +70,7 @@ elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
 elif opt.usemodel == 'CNN' and opt.dataset == 'subj':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 1 ##
+    parameters['nepch'] = 20
     
     parameters['lrate'] = 0.0001
     parameters['batch_size'] = 16
@@ -327,6 +327,8 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 if acquire_method == 'lm_parallel':
     lmapi = lmAPI(mappings)
+else:
+    lmapi = None
 
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
@@ -350,7 +352,8 @@ for acquire_percent in acquisition_strat:
                                         batch_size = adj_batch_size, checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)
 
-    lmapi.train_lm(active_train_data, checkpoint_folder = os.path.join(checkpoint_path,'lmweights'))
+    if acquire_method == 'lm_parallel':
+        lmapi.train_lm(active_train_data, checkpoint_folder = os.path.join(checkpoint_path,'lmweights'))
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     
