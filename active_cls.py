@@ -15,7 +15,7 @@ import torch
 from active_learning import Acquisition_CLS
 import cPickle as pkl
 import numpy as np
-
+import copy
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -50,20 +50,20 @@ parameters['ptrnd'] = opt.pretrnd
 if opt.usemodel == 'CNN' and opt.dataset == 'trec':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 10
+    parameters['nepch'] = 20
     
     parameters['lrate'] = 0.001
-    parameters['batch_size'] = 50
+    parameters['batch_size'] = 32
     parameters['opsiz'] = 6
     parameters['acqmd'] = 'd'
     
 elif opt.usemodel == 'CNN' and opt.dataset == 'mareview':
     parameters['dpout'] = 0.5
     parameters['wlchl'] = 100
-    parameters['nepch'] = 10
+    parameters['nepch'] = 20
     
     parameters['lrate'] = 0.001
-    parameters['batch_size'] = 50
+    parameters['batch_size'] = 32
     parameters['opsiz'] = 2
     parameters['acqmd'] = 'd'
 
@@ -223,11 +223,11 @@ if not os.path.exists(os.path.join(result_path, model_name, 'active_checkpoint',
 if opt.dataset == 'trec':
     train_data, test_data, mappings = loader.load_trec(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
-    valid_data = test_data.copy()
+    valid_data = copy.deepcopy(test_data)
 elif opt.dataset == 'mareview':
     train_data, test_data, mappings = loader.load_mareview(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
-    valid_data = test_data.copy()
+    valid_data = copy.deepcopy(test_data)
 elif opt.dataset == 'subj':
     train_data, valid_data, test_data, mappings = loader.load_subj(dataset_path, parameters['ptrnd'], 
                                                        parameters['wrdim'])
