@@ -38,6 +38,11 @@ parser.add_argument('--initdata', default=1, type=int, dest='initdata',
                     help="Percentage of Data to being with")
 parser.add_argument('--acquiremethod', default='random', type=str, dest='acquiremethod',
                     help="Percentage of Data to Acquire from Rest of Training Set")
+parser.add_argument('--lm_data', default=-1, type=int, dest='lm_data',
+                    help="Percentage of Data to train LM on")
+parser.add_argument('--softmax_type', type=str, dest='softmax_type')
+parser.add_argument('--softmax_temp', type=int, dest='softmax_temp')
+parser.add_argument('--no_norm_len', dest='no_norm_len', action='store_true')
 
 parameters = OrderedDict()
 
@@ -330,6 +335,14 @@ if acquire_method == 'lm_parallel':
 else:
     lmapi = None
 
+if acquire_method == 'lm_parallel' and opt.lm_data!=-1:
+    chosen_samples = list(range(len(train_data)))
+    np.random.seed(0)
+    np.random.shuffle(chosen_samples)
+    lm_train_data_t = list(np.array(train_data)[chosen_samples][:int((opt.lm_data*1.0*len(train_data))/100)])
+    print ('Training Language Model on %s samples' %(len(lm_train_data_t)))
+    lmapi.train_lm(lm_train_data_t, checkpoint_folder = os.path.join(result_path,'lmweights'))
+
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
 
@@ -339,7 +352,12 @@ acquisition_strat = acquisition_strat_all[:num_acquisitions_required]
 
 for acquire_percent in acquisition_strat:
     
-    checkpoint_folder = os.path.join('active_checkpoint',acquire_method, str(sentences_acquired).zfill(8))
+    if acquire_method != 'lm_parallel' or opt.lm_data == -1:
+        checkpoint_folder = os.path.join('active_checkpoint',acquire_method, str(sentences_acquired).zfill(8))
+    else:
+        checkpoint_folder = os.path.join('active_checkpoint',acquire_method+'_'+str(opt.lm_data), 
+                                         str(sentences_acquired).zfill(8))
+
     checkpoint_path = os.path.join(result_path, model_name, checkpoint_folder)
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)
@@ -352,15 +370,23 @@ for acquire_percent in acquisition_strat:
                                         batch_size = adj_batch_size, checkpoint_folder = checkpoint_folder,
                                         plot_every = acq_plot_every)
 
-    if acquire_method == 'lm_parallel':
+    if acquire_method == 'lm_parallel' and opt.lm_data == -1:
         lmapi.train_lm(active_train_data, checkpoint_folder = os.path.join(checkpoint_path,'lmweights'))
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition1.p'),'wb'))
     
-    saved_file_name = 'modelweights' if acquire_method != 'lm_parallel' else 'lmweights'
-    acquisition_function.obtain_data(model_path = os.path.join(checkpoint_path ,saved_file_name),
-                                     model_name = model_name, data = train_data, acquire = acquire_percent, 
-                                     method =acquire_method, lm_api = lmapi)
+    if acquire_method != 'lm_parallel' or opt.lm_data == -1:
+        saved_file_name = 'modelweights' if acquire_method != 'lm_parallel' else 'lmweights'
+        acquisition_function.obtain_data(model_path = os.path.join(checkpoint_path ,saved_file_name),
+                                         model_name = model_name, data = train_data, acquire = acquire_percent, 
+                                         method =acquire_method, lm_api = lmapi, softmax_type = opt.softmax_type,
+                                         softmax_temp = opt.softmax_temp, norm_len = not no_norm_len)
+    else:
+        saved_file_name = 'lmweights'
+        acquisition_function.obtain_data(model_path = os.path.join(result_path , saved_file_name),
+                                         model_name = model_name, data = train_data, acquire = acquire_percent, 
+                                         method =acquire_method, lm_api = lmapi, softmax_type = opt.softmax_type,
+                                         softmax_temp = opt.softmax_temp, norm_len = not no_norm_len)
     
     pkl.dump(acquisition_function, open(os.path.join(checkpoint_path,'acquisition2.p'),'wb'))
     
