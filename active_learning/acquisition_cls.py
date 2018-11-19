@@ -1,6 +1,7 @@
 import torch
 torch.manual_seed(0)
 from torch.autograd import Variable
+import torch.nn.functional as F
 import numpy as np
 from collections import Counter
 import time
@@ -197,7 +198,8 @@ class Acquisition_CLS(object):
         print ('BB Acquisition took %d seconds:' %(time.time()-tm))
         print ('*'*80)
 
-    def get_lmpplx(self, dataset, model_path, num_sentences, lm_api, batch_size = 32, norm_len = True):
+    def get_lmpplx(self, dataset, model_path, num_sentences, lm_api, batch_size = 32, norm_len = True,
+                   softmax_type=None, softmax_temp=None):
 
         model = torch.load(model_path)
         model.train(False)
@@ -231,20 +233,31 @@ class Acquisition_CLS(object):
         assert len(new_datapoints) == len(pplxscores)
         pplxs[new_datapoints] = np.array(pplxscores)
         
-        test_indices = np.argsort(pplxs)[::-1]
-        print(pplxs[test_indices])
-        cur_indices = set()
-        i = 0
-        while len(cur_indices)<num_sentences:
-            cur_indices.add(test_indices[i])
-            i+=1
-        self.train_index.update(cur_indices)
-        
+        if softmax_temp is None or softmax_type is None:
+            test_indices = np.argsort(pplxs)[::-1]
+            print(pplxs[test_indices])
+            cur_indices = set()
+            i = 0
+            while len(cur_indices)<num_sentences:
+                cur_indices.add(test_indices[i])
+                i+=1
+            self.train_index.update(cur_indices)
+        else:
+            if softmax_type == 'without_log':
+                pplxs = np.exp(pplxs)
+            to_sample_from = F.softmax((torch.FloatTensor(pplxs)/
+                                        softmax_temp).unsqueeze(0)).numpy().squeeze(0)
+            print(np.array(sorted(to_sample_from, reverse = True)))
+            cur_indices = set(np.random.choice(len(to_sample_from), size = num_sentences, 
+                                               replace = False, p = to_sample_from))
+            assert len(cur_indices) == num_sentences
+            self.train_index.update(cur_indices)
+
         print ('D Acquisition took %d seconds:' %(time.time()-tm))
 
         
     def obtain_data(self, data, model_path=None, model_name=None, acquire=2, method='random', num_samples=100,
-                    lm_api = None):
+                    lm_api = None, softmax_type = None, softmax_temp = None, norm_len = True):
         
         num_sentences = (acquire*self.sentencelen)/100
         
@@ -259,7 +272,8 @@ class Acquisition_CLS(object):
                     self.get_mnlp(data, model_path, num_sentences)
                 elif method == 'lm_parallel':
                     assert lm_api is not None
-                    self.get_lmpplx(data, model_path, num_sentences, lm_api)
+                    self.get_lmpplx(data, model_path, num_sentences, lm_api, softmax_type=softmax_type, 
+                                    softmax_temp=softmax_temp, norm_len = norm_len)
                 else:
                     raise NotImplementedError()
             elif self.acq_mode == 'm':
