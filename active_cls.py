@@ -343,19 +343,6 @@ num_epochs = parameters['nepch']
 print('Initial learning rate is: %s' %(learning_rate))
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-if acquire_method == 'lm_parallel':
-    lmapi = lmAPI(mappings)
-else:
-    lmapi = None
-
-if acquire_method == 'lm_parallel' and opt.lm_data!=-1:
-    chosen_samples = list(range(len(train_data)))
-    np.random.seed(0)
-    np.random.shuffle(chosen_samples)
-    lm_train_data_t = list(np.array(train_data)[chosen_samples][:int((opt.lm_data*1.0*len(train_data))/100)])
-    print ('Training Language Model on %s samples' %(len(lm_train_data_t)))
-    lmapi.train_lm(lm_train_data_t, checkpoint_folder = os.path.join(result_path,'lmweights'))
-
 active_train_data = [train_data[i] for i in acquisition_function.train_index]
 sentences_acquired = len(acquisition_function.train_index)
 
