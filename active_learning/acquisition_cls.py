@@ -198,66 +198,9 @@ class Acquisition_CLS(object):
         print ('BB Acquisition took %d seconds:' %(time.time()-tm))
         print ('*'*80)
 
-    def get_lmpplx(self, dataset, model_path, num_sentences, lm_api, batch_size = 32, norm_len = True,
-                   softmax_type=None, softmax_temp=None):
-
-        model = torch.load(model_path)
-        model.train(False)
-        tm = time.time()
-        pplxs = np.ones(len(dataset))*float('-inf')
         
-        new_dataset = [datapoint for j,datapoint in enumerate(dataset) if j not in self.train_index]
-        new_datapoints = [j for j in range(len(dataset)) if j not in self.train_index]
-        
-        data_batches = create_lms_batches(new_dataset, batch_size = batch_size, eos_token = lm_api.eos_token)
-        pplxscores = []
-        
-        for data in data_batches:
-            words = data['words']
-            targets = data['targets']
-            if self.usecuda:
-                words = Variable(torch.LongTensor(words)).cuda()
-                targets = torch.LongTensor(targets).cuda()
-            else:
-                words = Variable(torch.LongTensor(words))
-                targets = torch.LongTensor(targets)
-
-            wordslen = data['wordslen']
-
-            score = model.predict(words, targets, ntokens=lm_api.ntokens, 
-                                  usecuda = self.usecuda)
-            if norm_len:
-                score = score/np.array(wordslen)
-            pplxscores.extend(list(score))
-            
-        assert len(new_datapoints) == len(pplxscores)
-        pplxs[new_datapoints] = np.array(pplxscores)
-        
-        if softmax_temp is None or softmax_type is None:
-            test_indices = np.argsort(pplxs)[::-1]
-            print(pplxs[test_indices])
-            cur_indices = set()
-            i = 0
-            while len(cur_indices)<num_sentences:
-                cur_indices.add(test_indices[i])
-                i+=1
-            self.train_index.update(cur_indices)
-        else:
-            if softmax_type == 'without_log':
-                pplxs = np.exp(pplxs)
-            to_sample_from = F.softmax((torch.FloatTensor(pplxs)/
-                                        softmax_temp).unsqueeze(0)).numpy().squeeze(0)
-            print(np.array(sorted(to_sample_from, reverse = True)))
-            cur_indices = set(np.random.choice(len(to_sample_from), size = num_sentences, 
-                                               replace = False, p = to_sample_from))
-            assert len(cur_indices) == num_sentences
-            self.train_index.update(cur_indices)
-
-        print ('D Acquisition took %d seconds:' %(time.time()-tm))
-
-        
-    def obtain_data(self, data, model_path=None, model_name=None, acquire=2, method='random', num_samples=100,
-                    lm_api = None, softmax_type = None, softmax_temp = None, norm_len = True):
+    def obtain_data(self, data, model_path=None, model_name=None, acquire=2, 
+                    method='random', num_samples=100):
         
         num_sentences = (acquire*self.sentencelen)/100
         
@@ -270,10 +213,6 @@ class Acquisition_CLS(object):
             if self.acq_mode == 'd':
                 if method=='mnlp':
                     self.get_mnlp(data, model_path, num_sentences)
-                elif method == 'lm_parallel':
-                    assert lm_api is not None
-                    self.get_lmpplx(data, model_path, num_sentences, lm_api, softmax_type=softmax_type, 
-                                    softmax_temp=softmax_temp, norm_len = norm_len)
                 else:
                     raise NotImplementedError()
             elif self.acq_mode == 'm':
