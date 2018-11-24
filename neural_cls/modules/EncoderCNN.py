@@ -11,24 +11,18 @@ class EncoderCNN(nn.Module):
         self.out_channels = out_channels
         self.dropout = nn.Dropout(p=dropout_p)
         
-        self.embedding = nn.Embedding(vocab_size, embedding_size)
-        
-        in_channels = embedding_size
-        self.cnn1 = nn.Conv1d(in_channels, out_channels, kernel_size=3,
+        self.cnn1 = nn.Conv1d(embedding_size, out_channels, kernel_size=3,
                              padding = 1)
         self.cnn2 = nn.Conv1d(out_channels, out_channels, kernel_size=4,
                              padding = 1)
         self.cnn3 = nn.Conv1d(out_channels, out_channels, kernel_size=5,
                              padding = 1)
 
-    def forward(self, words, input_lengths=None):
-        
-        batch_size, _ = words.size()
-        
-        embedded = self.embedding(words)
-        embedded = self.dropout(embedded)
-        embedded = embedded.transpose(1,2)
-        output1 = F.relu(self.cnn1(embedded))       
+    def forward(self, word_embeddings, input_lengths=None):
+
+        word_embeddings = self.dropout(word_embeddings)
+        word_embeddings = word_embeddings.transpose(1,2)
+        output1 = F.relu(self.cnn1(word_embeddings))       
         output2 = F.relu(self.cnn2(output1))
         output3 = F.relu(self.cnn3(output2))
         output = nn.functional.max_pool1d(output3, kernel_size=output3.size(2))

@@ -98,6 +98,20 @@ def prepare_dataset(dataset, word_to_id, tag_to_id):
         })
     return data
 
+def word_mapping(dataset):
+    words = [[x.lower() for x in s[0].split()] for s in dataset]
+    dico = create_dico(words)
+
+    dico['<PAD>'] = 10000001
+    dico['<UNK>'] = 10000000
+    dico = {k:v for k,v in dico.items() if v>=2}
+    word_to_id, id_to_word = create_mapping(dico)
+
+    print("Found %i unique words (%i in total)" % (
+        len(dico), sum(len(x) for x in words)
+    ))
+    return dico, word_to_id, id_to_word
+
 def pad_seq(seq, max_length, PAD_token=0):
     
     seq += [PAD_token for i in range(max_length - len(seq))]
@@ -116,23 +130,28 @@ def create_batches(dataset, batch_size, order='keep'):
     num_batches = np.ceil(len(dataset)/float(batch_size)).astype('int')
 
     for i in range(num_batches):
-        batch_data = newdata[(i*batch_size):min(len(dataset),(i+1)*batch_size)]
+        batch_data = newdata[(i*batch_size):min(len(dataset),
+                             (i+1)*batch_size)]
 
         words_seqs = [itm['words'] for itm in batch_data]
         target_seqs = [itm['tag'] for itm in batch_data]
         str_words_seqs = [itm['str_words'] for itm in batch_data]
 
         seq_pairs = sorted(zip(words_seqs, target_seqs, str_words_seqs, 
-                               range(len(words_seqs))), key=lambda p: len(p[0]), reverse=True)
+                               range(len(words_seqs))), 
+                               key=lambda p: len(p[0]), reverse=True)
 
         words_seqs, target_seqs, str_words_seqs, sort_info = zip(*seq_pairs)
         
         words_lengths = np.array([len(s) for s in words_seqs])
-        words_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in words_seqs])
+        words_padded = np.array([pad_seq(s, np.max(words_lengths)) 
+                                 for s in words_seqs])
         words_mask = (words_padded!=0).astype('int')
 
-        outputdict = {'words':words_padded, 'tags': target_seqs, 'wordslen': words_lengths,
-                      'tagsmask':words_mask, 'str_words': str_words_seqs, 'sort_info': sort_info}
+        outputdict = {'words':words_padded, 'tags': target_seqs, 
+                      'wordslen': words_lengths,
+                      'tagsmask':words_mask, 'str_words': str_words_seqs, 
+                      'sort_info': sort_info}
 
         batches.append(outputdict)
 
@@ -146,24 +165,40 @@ def create_lms_batches(dataset, batch_size, eos_token):
     num_batches = np.ceil(len(dataset)/float(batch_size)).astype('int')
 
     for i in range(num_batches):
-        batch_data = newdata[(i*batch_size):min(len(dataset),(i+1)*batch_size)]
+        batch_data = newdata[(i*batch_size):min(len(dataset), \
+                             (i+1)*batch_size)]
         words_seqs = [itm['words'] for itm in batch_data]
-        target_seqs = [itm['words'][1:]+[eos_token] for itm in batch_data]        
+        target_seqs = [itm['words'][1:]+[eos_token] for \
+                       itm in batch_data]        
         words_lengths = np.array([len(s) for s in words_seqs])
-        words_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in words_seqs])
-        targets_padded = np.array([pad_seq(s, np.max(words_lengths)) for s in target_seqs])
+        words_padded = np.array([pad_seq(s, np.max(words_lengths)) 
+                                 for s in words_seqs])
+        targets_padded = np.array([pad_seq(s, np.max(words_lengths)) 
+                                  for s in target_seqs])
         words_mask = (words_padded!=0).astype('int')
-        outputdict = {'words':words_padded, 'wordslen': words_lengths, 'targetmask':words_mask, 
+        outputdict = {'words':words_padded, 'wordslen': words_lengths,
+                      'targetmask':words_mask, 
                       'targets': targets_padded}
         batches.append(outputdict)
 
     return batches
 
-def log_gaussian(x, mu, sigma):
-    return float(-0.5 * np.log(2 * np.pi) - np.log(np.abs(sigma))) - (x - mu)**2 / (2 * sigma**2)
 
-def log_gaussian_logsigma(x, mu, logsigma):
-    return float(-0.5 * np.log(2 * np.pi)) - logsigma - (x - mu)**2 / (2 * torch.exp(logsigma)**2)
+def load_glove_embeddings(embedding_path, word_dim, mappings):
+    all_word_embeds = {}
+    for i, line in enumerate(codecs.open(embedding_path, 'r', 'utf-8')):
+        s = line.strip().split()
+        if len(s) == word_dim + 1:
+            all_word_embeds[s[0]] = np.array([float(i) for i in s[1:]])
 
-def bayes_loss_function(l_pw, l_qw, l_likelihood, n_batches, batch_size):
-    return ((1./n_batches) * (l_qw - l_pw) - l_likelihood).sum() / float(batch_size)
+    word_to_id = mappings['word_to_id']
+    word_embeds = np.random.uniform(-np.sqrt(0.06), np.sqrt(0.06), 
+                                    (len(word_to_id), word_dim))
+
+    for w in word_to_id:
+        if w in all_word_embeds:
+            word_embeds[word_to_id[w]] = all_word_embeds[w]
+        elif w.lower() in all_word_embeds:
+            word_embeds[word_to_id[w]] = all_word_embeds[w.lower()]
+
+    print('Loaded %i pretrained embeddings.' % len(all_word_embeds))
